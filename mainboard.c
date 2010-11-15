@@ -77,15 +77,21 @@ volatile USHORT KeInputEdges;
 // Define the application names, in flash memory.
 //
 
-const CHAR KeTestApp1Name[] PROGMEM = "Test App 1";
-const CHAR KeTestApp2Name[] PROGMEM = "Test App 2";
+const CHAR KeGameOfLifeName[] PROGMEM = "Game of Life";
+const CHAR KeSokobanName[] PROGMEM = "Sokoban";
 const CHAR KeTestApp3Name[] PROGMEM = "Test App 3";
 const CHAR KeBlankString[] PROGMEM = "";
 
 PPGM KeApplicationNames[APPLICATION_COUNT] PROGMEM = {
-    KeTestApp1Name,
-    KeTestApp2Name,
+    KeGameOfLifeName,
+    KeSokobanName,
     KeTestApp3Name,
+};
+
+const PVOID KeApplicationEntryPoint[APPLICATION_COUNT] PROGMEM = {
+    LifeEntry,
+    SokobanEntry,
+    NULL
 };
 
 //
@@ -120,6 +126,7 @@ Return Value:
 {
 
     UCHAR Application;
+    PAPPLICATION_ENTRY ApplicationEntry;
     UCHAR LoopCount;
     CHAR String1[2];
     CHAR String2[2];
@@ -164,6 +171,13 @@ Return Value:
         HlSetLcdText(String1, String2);
         KeStall(32 * 1000UL * 2);
         HlSetLcdText(KeBlankString, KeBlankString);
+        ApplicationEntry = KeApplicationEntryPoint[Application - 1];
+
+        //
+        // Run the application.
+        //
+
+        Application = ApplicationEntry();
     }
 
     return 0;
@@ -437,6 +451,41 @@ Return Value:
     return;
 }
 
+VOID
+KeClearScreen (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine blanks the output matrix.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UCHAR XPixel;
+    UCHAR YPixel;
+
+    for (YPixel = 0; YPixel < MATRIX_HEIGHT; YPixel += 1) {
+        for (XPixel = 0; XPixel < MATRIX_WIDTH; XPixel += 1) {
+            KeMatrix[YPixel][XPixel] = 0;
+        }
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -502,7 +551,11 @@ Return Value:
         KeStallTenthSecond();
     }
 
-    KeInputEdges &= ~INPUT_STANDBY;
+    //
+    // Pretend like none of the other button pushes etc were noticed.
+    //
+
+    KeInputEdges = 0;
     KeWhiteLeds = OldWhiteLeds;
     return;
 }

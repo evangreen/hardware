@@ -23,7 +23,11 @@
 
 BINARY1 := mainboard
 
-OBJS1 := mainboard.o
+OBJS1 := mainboard.o \
+         life.o      \
+         sokoban.o   \
+         sokodata.o  \
+
 X86_OBJS1 := x86\winmain.o
 AVR_OBJS1 := avr/avrmain.o
 
@@ -133,7 +137,25 @@ $(BINARY1): $(ALLOBJS1)
 	@echo Binplacing - $(OBJROOT)\$(BINARY1)
 	@xcopy /Y /I /Q $(OBJROOT)\$(BINARY1) $(BINROOT)\ > nul
 
+makesoko.exe: makesoko.o
+	@echo Linking - $@
+	@cd $(OBJROOT) && $(CC) -o $@ $^
+
 endif
+
+ifeq ($(ARCH),avr)
+makesoko.exe: x86obj\makesoko.exe
+	@cp -f $(OBJROOT)\..\x86obj\makesoko.exe $(OBJROOT)\makesoko.exe
+
+endif
+
+sokodata.o: sokodata.c
+	@echo Compiling - $<
+	@cd $(OBJROOT) && $(CC) -I$(CURDIR) $(CCOPTIONS) -c -o $(OBJROOT)/$@ $<
+
+sokodata.c: makesoko.exe sokolevels.txt sokoban.h
+	@echo Creating - $@
+	@$(OBJROOT)\makesoko.exe -o $(OBJROOT)\$@ sokolevels.txt
 
 $(OBJROOT):
 	-@mkdir $(OBJROOT) > nul

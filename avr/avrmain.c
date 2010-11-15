@@ -105,6 +105,32 @@ Return Value:
     return;
 }
 
+USHORT
+HlRandom (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a random number between 0 and 65535.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a random number between 0 and 65535.
+
+--*/
+
+{
+
+    return 0;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

@@ -28,10 +28,11 @@ Author:
 #define MATRIX_WIDTH 24
 
 //
-// Defines masks for pixel bitfields.
+// Defines masks for pixel bitfields. The pixel user bit is ignored by hardware
+// and can be used by applications.
 //
 
-#define PIXEL_BLANK_OVERRIDE 0x8000
+#define PIXEL_USER_BIT 0x8000
 #define PIXEL_RED_MASK 0x7C00
 #define PIXEL_GREEN_MASK 0x03E0
 #define PIXEL_BLUE_MASK 0x001F
@@ -68,6 +69,28 @@ typedef enum _APPLICATION {
     ApplicationTestApp1,
     ApplicationTestApp2,
 } APPLICATION, *PAPPLICATION;
+
+typedef
+APPLICATION
+(*PAPPLICATION_ENTRY) (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine defines an application entry point.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the index of the next application to run.
+
+--*/
 
 //
 // --------------------------------------------------------------------- Macros
@@ -253,6 +276,27 @@ Return Value:
 
 --*/
 
+VOID
+KeClearScreen (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine blanks the output matrix.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // Hardware Layer Functions
 //
@@ -301,6 +345,73 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+USHORT
+HlRandom (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a random number between 0 and 65535.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a random number between 0 and 65535.
+
+--*/
+
+//
+// Application Entry Points
+//
+
+APPLICATION
+LifeEntry (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the entry point for Conway's Game of Life.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the index of the next application to launch.
+
+--*/
+
+APPLICATION
+SokobanEntry (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the entrypoint for the Sokoban game.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the next application to be run.
 
 --*/
 

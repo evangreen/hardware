@@ -28,6 +28,8 @@ Environment:
 #include <windows.h>
 #include <windowsx.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include "types.h"
 #include "mainboard.h"
@@ -327,6 +329,7 @@ Return Value:
 
     QueryPerformanceCounter(&LargeInteger);
     HlInitialQpcValue = LargeInteger.QuadPart;
+    srand(time(NULL));
 
     //
     // Kick off the UI thread.
@@ -377,6 +380,32 @@ Return Value:
     InvalidateRect(HlWindow, NULL, TRUE);
     UpdateWindow(HlWindow);
     return;
+}
+
+USHORT
+HlRandom (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a random number between 0 and 65535.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a random number between 0 and 65535.
+
+--*/
+
+{
+
+    return (USHORT)rand();
 }
 
 //
