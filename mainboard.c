@@ -65,6 +65,11 @@ volatile USHORT KeWhiteLeds;
 //
 
 volatile USHORT KeCurrentTime;
+volatile UCHAR KeCurrentSeconds;
+volatile UCHAR KeCurrentMinutes;
+volatile UCHAR KeCurrentHours;
+volatile UCHAR KeCurrentDate;
+volatile UCHAR KeCurrentMonth;
 
 //
 // Define the inputs.
@@ -79,19 +84,19 @@ volatile USHORT KeInputEdges;
 
 const CHAR KeGameOfLifeName[] PROGMEM = "Game of Life";
 const CHAR KeSokobanName[] PROGMEM = "Sokoban";
-const CHAR KeTestApp3Name[] PROGMEM = "Test App 3";
+const CHAR KeTetrisName[] PROGMEM = "Tetris";
 const CHAR KeBlankString[] PROGMEM = "";
 
 PPGM KeApplicationNames[APPLICATION_COUNT] PROGMEM = {
     KeGameOfLifeName,
     KeSokobanName,
-    KeTestApp3Name,
+    KeTetrisName,
 };
 
 const PVOID KeApplicationEntryPoint[APPLICATION_COUNT] PROGMEM = {
     LifeEntry,
     SokobanEntry,
-    NULL
+    TetrisEntry,
 };
 
 //
@@ -149,8 +154,8 @@ Return Value:
     //
 
     LoopCount = 0;
+    Application = ApplicationNone;
     while (TRUE) {
-        Application = ApplicationNone;
 
         //
         // For the first time (or if for some reason an application returned 0,
@@ -342,9 +347,63 @@ Return Value:
 
 {
 
+    UCHAR MonthChanging;
+
+    MonthChanging = FALSE;
     KeCurrentTime += TimePassed;
-    if (KeCurrentTime >= 32 * 1000) {
+    while (KeCurrentTime >= 32 * 1000) {
         KeCurrentTime -= 32 * 1000;
+        if (KeCurrentSeconds == 59) {
+            KeCurrentSeconds = 0;
+            if (KeCurrentMinutes == 59) {
+                KeCurrentMinutes = 0;
+                if (KeCurrentHours == 23) {
+                    KeCurrentHours = 0;
+                    if (KeCurrentMonth == 1) {
+                        if (KeCurrentDate == 27) {
+                            MonthChanging = TRUE;
+                        }
+
+                    } else if ((KeCurrentMonth == 0) ||
+                               (KeCurrentMonth == 2) ||
+                               (KeCurrentMonth == 4) ||
+                               (KeCurrentMonth == 6) ||
+                               (KeCurrentMonth == 7) ||
+                               (KeCurrentMonth == 9) ||
+                               (KeCurrentMonth == 11)) {
+
+                        if (KeCurrentDate == 30) {
+                            MonthChanging = TRUE;
+                        }
+
+                    } else {
+                        if (KeCurrentDate == 29) {
+                            MonthChanging = TRUE;
+                        }
+                    }
+
+                    if (MonthChanging != FALSE) {
+                        if (KeCurrentMonth == 11) {
+                            KeCurrentMonth = 0;
+
+                        } else {
+                            KeCurrentMonth += 1;
+                        }
+
+                    } else {
+                        KeCurrentDate += 1;
+                    }
+                } else {
+                    KeCurrentHours += 1;
+                }
+
+            } else {
+                KeCurrentMinutes += 1;
+            }
+
+        } else {
+            KeCurrentSeconds += 1;
+        }
     }
 
     return;
@@ -400,25 +459,34 @@ Return Value:
 
 {
 
+    UCHAR CurrentSeconds;
     USHORT CurrentTime;
     USHORT EndTime;
 
+    CurrentSeconds = KeCurrentSeconds;
     CurrentTime = KeCurrentTime;
     while (StallTime >= 32 * 1000) {
 
         //
-        // Wait for time to roll over to 0.
+        // Wait for the time to roll over to 0.
         //
 
-        while (KeCurrentTime >= CurrentTime) {
+        while (KeCurrentSeconds == CurrentSeconds) {
             NOTHING;
         }
 
+        CurrentSeconds += 1;
+        if (CurrentSeconds == 60) {
+            CurrentSeconds = 0;
+        }
+
         //
-        // Wait for time to catch up to this time.
+        // Wait for the time to catch up to this time.
         //
 
-        while (KeCurrentTime < CurrentTime) {
+        while ((KeCurrentTime < CurrentTime) &&
+               (KeCurrentSeconds == CurrentSeconds)) {
+
             NOTHING;
         }
 
@@ -435,8 +503,13 @@ Return Value:
     //
 
     if (EndTime < CurrentTime) {
-        while (KeCurrentTime > EndTime) {
+        while (KeCurrentSeconds == CurrentSeconds) {
             NOTHING;
+        }
+
+        CurrentSeconds += 1;
+        if (CurrentSeconds == 60) {
+            CurrentSeconds = 0;
         }
     }
 
@@ -444,7 +517,7 @@ Return Value:
     // Wait for current time to pass the end time.
     //
 
-    while (KeCurrentTime < EndTime) {
+    while ((KeCurrentTime < EndTime) && (KeCurrentSeconds == CurrentSeconds)) {
         NOTHING;
     }
 

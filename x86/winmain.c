@@ -893,8 +893,8 @@ Return Value:
         RedValue = WhiteValue;
     }
 
-    if (WhiteValue * 2 > GreenValue) {
-        GreenValue = WhiteValue * 2;
+    if (WhiteValue > GreenValue) {
+        GreenValue = WhiteValue;
     }
 
     if (WhiteValue > BlueValue) {

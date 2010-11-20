@@ -27,6 +27,7 @@ OBJS1 := mainboard.o \
          life.o      \
          sokoban.o   \
          sokodata.o  \
+         tetris.o    \
 
 X86_OBJS1 := x86\winmain.o
 AVR_OBJS1 := avr/avrmain.o

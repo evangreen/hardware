@@ -415,3 +415,24 @@ Return Value:
 
 --*/
 
+APPLICATION
+TetrisEntry (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the entry point for Tetris.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the next application to be run.
+
+--*/
+

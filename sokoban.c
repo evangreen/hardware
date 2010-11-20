@@ -155,6 +155,7 @@ Return Value:
     LevelComplete = FALSE;
     NextApplication = ApplicationNone;
     KeTrackball2 = 0;
+    KeTrackball1 = 0;
     KeWhiteLeds = TRACKBALL2_WHITEPIXEL(0x10);
     while (TRUE) {
         KeClearScreen();
@@ -305,8 +306,8 @@ Return Value:
                 // move onto the next level.
                 //
 
-                if ((KeInputEdges & INPUT_BUTTON1) != 0) {
-                    KeInputEdges &= ~INPUT_BUTTON1;
+                if ((KeInputEdges & (INPUT_BUTTON1 | INPUT_BUTTON2)) != 0) {
+                    KeInputEdges &= ~(INPUT_BUTTON1 | INPUT_BUTTON2);
                     CurrentLevel += 1;
                     if (CurrentLevel == SOKOBAN_LEVELS) {
                         CurrentLevel = 0;
