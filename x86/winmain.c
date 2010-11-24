@@ -33,6 +33,7 @@ Environment:
 
 #include "types.h"
 #include "mainboard.h"
+#include "fontdata.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -231,6 +232,13 @@ PSTR HlLcdLine2 = "";
 USHORT HlMatrix[MATRIX_HEIGHT][MATRIX_WIDTH];
 
 //
+// Maintain which pixels have text printed on them.
+//
+
+USHORT HlTextColor[MATRIX_HEIGHT][MATRIX_WIDTH];
+BOOLEAN HlNewTextPrinted;
+
+//
 // Maintain a shadow copy of the current state of the trackballs/standby light.
 //
 
@@ -325,11 +333,24 @@ Return Value:
 
     LARGE_INTEGER LargeInteger;
     BOOLEAN Result;
+    SYSTEMTIME SystemTime;
     HANDLE UiThread;
 
     QueryPerformanceCounter(&LargeInteger);
     HlInitialQpcValue = LargeInteger.QuadPart;
     srand(time(NULL));
+
+    //
+    // Set up the current time variables.
+    //
+
+    GetLocalTime(&SystemTime);
+    KeCurrentMonth = SystemTime.wMonth - 1;
+    KeCurrentWeekday = SystemTime.wDayOfWeek;
+    KeCurrentDate = SystemTime.wDay - 1;
+    KeCurrentHours = SystemTime.wHour;
+    KeCurrentMinutes = SystemTime.wMinute;
+    KeCurrentHalfSeconds = SystemTime.wSecond * 2;
 
     //
     // Kick off the UI thread.
@@ -406,6 +427,230 @@ Return Value:
 {
 
     return (USHORT)rand();
+}
+
+VOID
+HlPrintText (
+    UCHAR Size,
+    UCHAR XPosition,
+    UCHAR YPosition,
+    UCHAR Character,
+    USHORT Color
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a character onto the matrix.
+
+Arguments:
+
+    Size - Supplies the size of the character to print. Valid values are as
+        follows:
+
+        0 - Prints a 3 x 5 character.
+
+        1 - Prints a 5 x 7 character.
+
+    XPosition - Supplies the X coordinate of the upper left corner of the
+        letter.
+
+    YPosition - Supplies the Y coordinate of the upper left corner of the
+        letter.
+
+    Character - Supplies the character to print,
+
+    Color - Supplies the color to print the character.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UCHAR BitSet;
+    UCHAR Column;
+    UCHAR EncodedData;
+    UCHAR XPixel;
+    UCHAR YPixel;
+
+    switch (Size) {
+        case 0:
+
+            //
+            // Not all characters are printable, but print the ones that are.
+            //
+
+            if ((Character >= '0') && (Character <= '9')) {
+                Character = FONT_3X5_NUMERIC_OFFSET + (Character - '0');
+
+            } else if (Character == ':') {
+                Character = FONT_3X5_COLON_OFFSET;
+
+            } else if (Character == '=') {
+                Character = FONT_3X5_EQUALS_OFFSET;
+
+            } else if ((Character >= 'a') && (Character <= 'z')) {
+                Character = FONT_3X5_ALPHA_OFFSET + Character - 'a';
+
+            } else if ((Character >= 'A') && (Character <= 'Z')) {
+                Character = FONT_3X5_ALPHA_OFFSET + Character - 'A';
+
+            } else {
+                Character = FONT_3X5_SPACE_OFFSET;
+            }
+
+            //
+            // Loop over every destination column.
+            //
+
+            for (XPixel = XPosition;
+                 ((XPixel < XPosition + 3) && (XPixel < MATRIX_WIDTH));
+                 XPixel += 1) {
+
+                //
+                // Loop over every destination row. The encoded bytes are laid
+                // out as follows:
+                //
+                // -----*** **+++++
+                // ABCDEABC DEABCDE0
+                //
+                // Where - is column 0, * is column 1, and + is column 2. A-F
+                // represent rows 0-4.
+                //
+
+                for (YPixel = YPosition;
+                     ((YPixel < YPosition + 5) && (YPixel < MATRIX_HEIGHT));
+                     YPixel += 1) {
+
+                    BitSet = FALSE;
+                    Column = YPixel - YPosition;
+
+                    //
+                    // In column 0, the rows are simply packed into the high 5
+                    // bits of the first byte.
+                    //
+
+                    if (XPixel - XPosition == 0) {
+                        if ((KeFontData3x5[Character][0] &
+                             (1 << (7 - Column))) != 0) {
+
+                            BitSet = TRUE;
+                        }
+
+                    //
+                    // In column 1, the first 3 rows are packed into the low
+                    // 3 bits of the first byte. The other 2 rows are packed
+                    // into the high 2 bits of the second byte.
+                    //
+
+                    } else if (XPixel - XPosition == 1) {
+                        if (Column < 3) {
+                            if ((KeFontData3x5[Character][0] &
+                                 (1 << (2 - Column))) != 0) {
+
+                                BitSet = TRUE;
+                            }
+
+                        } else {
+                            if ((KeFontData3x5[Character][1] &
+                                 (1 << (7 - (Column - 3)))) != 0) {
+
+                                BitSet = TRUE;
+                            }
+                        }
+
+                    //
+                    // The third column of data is packed into the remaining
+                    // bits of byte two, with the lowest bit going unused.
+                    //
+
+                    } else {
+                        if ((KeFontData3x5[Character][1] &
+                             (1 << (5 - Column))) != 0) {
+
+                            BitSet = TRUE;
+                        }
+                    }
+
+                    if (BitSet != FALSE) {
+                        HlTextColor[YPixel][XPixel] = Color;
+
+                    } else {
+                        HlTextColor[YPixel][XPixel] = 0;
+                    }
+                }
+            }
+
+            break;
+
+        case 1:
+        default:
+            for (XPixel = XPosition;
+                 ((XPixel < XPosition + 5) && (XPixel < MATRIX_WIDTH));
+                 XPixel += 1) {
+
+                EncodedData = KeFontData5x7[Character][XPixel - XPosition];
+                for (YPixel = YPosition;
+                     ((YPixel < YPosition + 8) && (YPixel < MATRIX_HEIGHT));
+                     YPixel += 1) {
+
+                    if ((EncodedData & 0x1) != 0) {
+                        HlTextColor[YPixel][XPixel] = Color;
+
+                    } else {
+                        HlTextColor[YPixel][XPixel] = 0;
+                    }
+
+                    EncodedData = EncodedData >> 1;
+
+                }
+            }
+
+            break;
+    }
+
+    HlNewTextPrinted = TRUE;
+    return;
+}
+
+VOID
+HlClearScreen (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine clears the entire screen, turning off all LEDs.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG XPixel;
+    ULONG YPixel;
+
+    for (YPixel = 0; YPixel < MATRIX_HEIGHT; YPixel += 1) {
+        for (XPixel = 0; XPixel < MATRIX_WIDTH; XPixel += 1) {
+            HlTextColor[YPixel][XPixel] = 0;
+        }
+    }
+
+    HlNewTextPrinted = TRUE;
+    return;
 }
 
 //
@@ -736,6 +981,11 @@ Return Value:
     ULONG YPixel;
 
     Changes = FALSE;
+    if (HlNewTextPrinted != FALSE) {
+        HlNewTextPrinted = FALSE;
+        return TRUE;
+    }
+
     for (YPixel = 0; YPixel < MATRIX_HEIGHT; YPixel += 1) {
         for (XPixel = 0; XPixel < MATRIX_WIDTH; XPixel += 1) {
             Pixel = KeMatrix[YPixel][XPixel];
@@ -812,7 +1062,25 @@ Return Value:
     OriginalPen = SelectObject(Dc, OffPen);
     for (YPixel = 0; YPixel < MATRIX_HEIGHT; YPixel += 1) {
         for (XPixel = 0; XPixel < MATRIX_WIDTH; XPixel += 1) {
-            Pixel = KeMatrix[YPixel][XPixel];
+
+            //
+            // If there's a text color, use that unless the screen color has
+            // been updated, in which case obliterate the text color.
+            //
+
+            if (HlTextColor[YPixel][XPixel] != 0) {
+                Pixel = HlTextColor[YPixel][XPixel];
+                if (KeMatrix[YPixel][XPixel] != HlMatrix[YPixel][XPixel]) {
+                    Pixel = KeMatrix[YPixel][XPixel];
+                    HlMatrix[YPixel][XPixel] = Pixel;
+                    HlTextColor[YPixel][XPixel] = 0;
+                }
+
+            } else {
+                Pixel = KeMatrix[YPixel][XPixel];
+                HlMatrix[YPixel][XPixel] = Pixel;
+            }
+
             if (Pixel != 0) {
                 BrushStyle.lbColor = HlpPixelToColorRef(Pixel);
                 ColoredPen = ExtCreatePen(PenStyle,
@@ -832,7 +1100,6 @@ Return Value:
             YPosition = MATRIX_PIXEL_SPACING + (YPixel * MATRIX_PIXEL_SPACING);
             MoveToEx(Dc, XPosition, YPosition, NULL);
             LineTo(Dc, XPosition, YPosition);
-            HlMatrix[YPixel][XPixel] = KeMatrix[YPixel][XPixel];
             if (Pixel != 0) {
                 SelectObject(Dc, OffPen);
                 DeleteObject(ColoredPen);

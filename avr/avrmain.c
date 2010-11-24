@@ -131,6 +131,77 @@ Return Value:
     return 0;
 }
 
+VOID
+HlPrintText (
+    UCHAR Size,
+    UCHAR XPosition,
+    UCHAR YPosition,
+    UCHAR Character,
+    USHORT Color
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a character onto the matrix.
+
+Arguments:
+
+    Size - Supplies the size of the character to print. Valid values are as
+        follows:
+
+        0 - Prints a 3 x 5 character.
+
+        1 - Prints a 5 x 7 character.
+
+    XPosition - Supplies the X coordinate of the upper left corner of the
+        letter.
+
+    YPosition - Supplies the Y coordinate of the upper left corner of the
+        letter.
+
+    Character - Supplies the character to print,
+
+    Color - Supplies the color to print the character.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+
+VOID
+HlClearScreen (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine clears the entire screen, turning off all LEDs.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

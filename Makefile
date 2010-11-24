@@ -23,13 +23,16 @@
 
 BINARY1 := mainboard
 
-OBJS1 := mainboard.o \
+OBJS1 := clock.o     \
+         mainboard.o \
          life.o      \
          sokoban.o   \
          sokodata.o  \
          tetris.o    \
 
-X86_OBJS1 := x86\winmain.o
+X86_OBJS1 := fontdata.o \
+             x86\winmain.o \
+
 AVR_OBJS1 := avr/avrmain.o
 
 MCU = atmega328p

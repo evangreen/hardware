@@ -153,8 +153,20 @@ extern volatile USHORT KeWhiteLeds;
 // Define the inputs.
 //
 
-volatile USHORT KeRawInputs;
-volatile USHORT KeInputEdges;
+extern volatile USHORT KeRawInputs;
+extern volatile USHORT KeInputEdges;
+
+//
+// Define the current time variables.
+//
+
+extern volatile USHORT KeCurrentTime;
+extern volatile UCHAR KeCurrentHalfSeconds;
+extern volatile UCHAR KeCurrentMinutes;
+extern volatile UCHAR KeCurrentHours;
+extern volatile UCHAR KeCurrentWeekday;
+extern volatile UCHAR KeCurrentDate;
+extern volatile UCHAR KeCurrentMonth;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -369,6 +381,67 @@ Return Value:
 
 --*/
 
+VOID
+HlPrintText (
+    UCHAR Size,
+    UCHAR XPosition,
+    UCHAR YPosition,
+    UCHAR Character,
+    USHORT Color
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a character onto the matrix.
+
+Arguments:
+
+    Size - Supplies the size of the character to print. Valid values are as
+        follows:
+
+        0 - Prints a 3 x 5 character.
+
+        1 - Prints a 5 x 7 character.
+
+    XPosition - Supplies the X coordinate of the upper left corner of the
+        letter.
+
+    YPosition - Supplies the Y coordinate of the upper left corner of the
+        letter.
+
+    Character - Supplies the character to print,
+
+    Color - Supplies the color to print the character.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlClearScreen (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine clears the entire screen, turning off all LEDs.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // Application Entry Points
 //
@@ -433,6 +506,27 @@ Arguments:
 Return Value:
 
     Returns the next application to be run.
+
+--*/
+
+APPLICATION
+ClockEntry (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the entry point into the clock application.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the next application that should be run.
 
 --*/
 
