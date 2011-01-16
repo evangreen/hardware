@@ -39,8 +39,14 @@ Environment:
 #define DEFAULT_MONTH 1
 #define DEFAULT_DATE 11
 #define DEFAULT_WEEKDAY 2
-#define DEFAULT_HOUR 12
-#define DEFAULT_MINUTE 59
+#define DEFAULT_HOUR 0
+#define DEFAULT_MINUTE 0
+
+//
+// Define the calibration adjustment applied to this specific board.
+//
+
+#define TIMER_CALIBRATION_VALUE 0
 
 //
 // Define the display size.
@@ -126,12 +132,32 @@ Environment:
     (ROW1 | ROW2 | ROW4 | COLUMN3 | COLUMN4 | COLUMN5)
 
 //
+// Define EEPROM layout.
+//
+
+#define EEPROM_YEAR 0
+#define EEPROM_MONTH 1
+#define EEPROM_DATE 2
+#define EEPROM_WEEKDAY 3
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
 VOID
 HlStall (
     ULONG Microseconds
+    );
+
+VOID
+HlWriteEepromByte (
+    USHORT Address,
+    UCHAR Byte
+    );
+
+UCHAR
+HlReadEepromByte (
+    UCHAR Address
     );
 
 VOID
@@ -175,6 +201,16 @@ KeGetUserValue (
     USHORT InitialValue,
     USHORT MinValue,
     USHORT MaxValue
+    );
+
+VOID
+KeSaveDate (
+    VOID
+    );
+
+VOID
+KeRestoreDate (
+    VOID
     );
 
 //
@@ -335,10 +371,16 @@ Return Value:
     HlEnableInterrupts();
 
     //
+    // If a previous date was saved in the EEPROM, restore it.
+    //
+
+    KeRestoreDate();
+
+    //
     // Set up the periodic timer interrupt to generate an interrupt every 1ms.
     //
 
-    TickCount = PROCESSOR_HZ / PERIODIC_TIMER_RATE;
+    TickCount = (PROCESSOR_HZ / PERIODIC_TIMER_RATE) + TIMER_CALIBRATION_VALUE;
     HlWriteIo(TIMER1_COMPARE_A_HIGH, (UCHAR)(TickCount >> 8));
     HlWriteIo(TIMER1_COMPARE_A_LOW, (UCHAR)(TickCount & 0xFF));
     HlWriteIo(TIMER1_CONTROL_B,
@@ -361,8 +403,22 @@ Return Value:
 
     while (TRUE) {
         KeShowBinaryClock();
+
+        //
+        // Scroll the full date every 4 minutes or so, just to keep it fun.
+        //
+
         if ((HlRawMilliseconds & 0x3FFFF) == 0) {
             KeScrollFullDate();
+        }
+
+        //
+        // Every 6 days or so, save the date. If the EEPROM lasts for 100000
+        // writes, it will basically never die at this rate.
+        //
+
+        if ((HlRawMilliseconds & 0x1FFFFFFF) == 0) {
+            KeSaveDate();
         }
 
         //
@@ -606,6 +662,121 @@ Return Value:
     }
 
     return;
+}
+
+VOID
+HlWriteEepromByte (
+    USHORT Address,
+    UCHAR Byte
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes a byte into the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to program.
+
+    Byte - Supplies the value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UCHAR ControlValue;
+
+    //
+    // Wait for the EEPROM unit to be ready.
+    //
+
+    while ((HlReadIo(EEPROM_CONTROL) & EEPROM_CONTROL_WRITE_ENABLE) != 0) {
+        NOTHING;
+    }
+
+    //
+    // Set up the address and data registers.
+    //
+
+    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)(Address >> 8));
+    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)Address);
+    HlWriteIo(EEPROM_DATA, Byte);
+
+    //
+    // Write a logical one to the master write enable, and then within 4 cycles
+    // write one to the write enable bit. Disable interrupts around this
+    // operation since this must be done with tight timing constraints.
+    //
+
+    ControlValue = HlReadIo(EEPROM_CONTROL);
+    ControlValue |= EEPROM_CONTROL_MASTER_WRITE_ENABLE;
+    HlDisableInterrupts();
+    HlWriteIo(EEPROM_CONTROL, ControlValue);
+    HlWriteIo(EEPROM_CONTROL, ControlValue | EEPROM_CONTROL_WRITE_ENABLE);
+    HlEnableInterrupts();
+    return;
+}
+
+UCHAR
+HlReadEepromByte (
+    UCHAR Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads a byte from the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to read.
+
+Return Value:
+
+    Returns the contents of the EEPROM memory at that byte.
+
+--*/
+
+{
+
+    UCHAR ControlRegister;
+
+    //
+    // Wait for the EEPROM unit to be ready.
+    //
+
+    while ((HlReadIo(EEPROM_CONTROL) & EEPROM_CONTROL_WRITE_ENABLE) != 0) {
+        NOTHING;
+    }
+
+    //
+    // Set up the address register.
+    //
+
+    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)(Address >> 8));
+    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)Address);
+
+    //
+    // Execute the EEPROM read.
+    //
+
+    ControlRegister = HlReadIo(EEPROM_CONTROL);
+    HlWriteIo(EEPROM_CONTROL, ControlRegister | EEPROM_CONTROL_READ_ENABLE);
+
+    //
+    // Read the resulting data.
+    //
+
+    return HlReadIo(EEPROM_DATA);
 }
 
 VOID
@@ -972,20 +1143,6 @@ Return Value:
         KeScrollText(KeBirthdayMessage);
     }
 
-    StringAddress =
-                  (PPGM)RtlReadProgramSpace16(&(KeWeekdays[KeCurrentWeekday]));
-
-    KeScrollText(StringAddress);
-    KeScrollText(KeSpaceString);
-    StringAddress =
-                  (PPGM)RtlReadProgramSpace16(&(KeMonths[KeCurrentMonth - 1]));
-
-    KeScrollText(StringAddress);
-    KeScrollText(KeSpaceString);
-    KeScrollNumber(KeCurrentDate);
-    KeScrollText(KeCommaSpaceString);
-    KeScrollNumber(KeCurrentYear);
-    KeScrollText(KeSpaceString);
     do {
         CurrentMinute = KeCurrentMinute;
         CurrentHour = KeCurrentHour;
@@ -1022,6 +1179,20 @@ Return Value:
         KeScrollText(KeSpaceString);
     }
 
+    StringAddress =
+                  (PPGM)RtlReadProgramSpace16(&(KeWeekdays[KeCurrentWeekday]));
+
+    KeScrollText(StringAddress);
+    KeScrollText(KeSpaceString);
+    StringAddress =
+                  (PPGM)RtlReadProgramSpace16(&(KeMonths[KeCurrentMonth - 1]));
+
+    KeScrollText(StringAddress);
+    KeScrollText(KeSpaceString);
+    KeScrollNumber(KeCurrentDate);
+    KeScrollText(KeCommaSpaceString);
+    KeScrollNumber(KeCurrentYear);
+    KeScrollText(KeSpaceString);
     return;
 }
 
@@ -1232,6 +1403,7 @@ ProgramTimeEnd:
         KeCurrentSecond = 0;
         KeMilitaryTime = MilitaryTime;
         HlEnableInterrupts();
+        KeSaveDate();
     }
 
     return;
@@ -1311,5 +1483,111 @@ Return Value:
     }
 
     return Value;
+}
+
+VOID
+KeSaveDate (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes the current date into EEPROM memory so that it can
+    survive a power loss. Since the EEPROM only survives about 100,000 writes,
+    this isn't done very often, and only makes it slightly less annoying when
+    the power goes out.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (HlReadEepromByte(EEPROM_YEAR) != KeCurrentYear - 2011) {
+        HlWriteEepromByte(EEPROM_YEAR, (UCHAR)(KeCurrentYear - 2011));
+    }
+
+    if (HlReadEepromByte(EEPROM_MONTH) != KeCurrentMonth) {
+        HlWriteEepromByte(EEPROM_MONTH, KeCurrentMonth);
+    }
+
+    if (HlReadEepromByte(EEPROM_DATE) != KeCurrentDate) {
+        HlWriteEepromByte(EEPROM_DATE, KeCurrentDate);
+    }
+
+    if (HlReadEepromByte(EEPROM_WEEKDAY) != KeCurrentWeekday) {
+        HlWriteEepromByte(EEPROM_WEEKDAY, KeCurrentWeekday);
+    }
+
+    return;
+}
+
+VOID
+KeRestoreDate (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restores the current date saved in the permanent EEPROM memory
+    and sets it as the current date.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UCHAR Date;
+    UCHAR Month;
+    UCHAR Weekday;
+    UCHAR YearByte;
+
+    //
+    // Read the bytes from the EEPROM.
+    //
+
+    YearByte = HlReadEepromByte(EEPROM_YEAR);
+    Month = HlReadEepromByte(EEPROM_MONTH);
+    Date = HlReadEepromByte(EEPROM_DATE);
+    Weekday = HlReadEepromByte(EEPROM_WEEKDAY);
+
+    //
+    // If the values are uninitialized, bail.
+    //
+
+    if ((YearByte == 0xFF) || (Month == 0xFF) ||
+        (Date == 0xFF) || (Weekday == 0xFF)) {
+
+        return;
+    }
+
+    //
+    // Set the current date.
+    //
+
+    HlDisableInterrupts();
+    KeCurrentYear = DEFAULT_YEAR + YearByte;
+    KeCurrentMonth = Month;
+    KeCurrentDate = Date;
+    KeCurrentWeekday = Weekday;
+    HlEnableInterrupts();
+    return;
 }
 

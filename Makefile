@@ -103,7 +103,7 @@ ASOPTIONS = --gstabs+                                           \
 all: $(OBJROOT) $(BINROOT) $(BINARY1)
 
 program: all
-	avrdude -c usbtiny -patmega48 -U flash:w:avrbin\$(BINARY1) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0x01:m
+	avrdude -c usbtiny -p$(MCU) -U flash:w:avrbin\$(BINARY1) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0x01:m
 
 #
 # The dependencies of the binary object depend on the architecture and type of
