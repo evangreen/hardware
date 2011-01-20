@@ -36,8 +36,8 @@ Environment:
 //
 
 #define DEFAULT_YEAR 2011
-#define DEFAULT_MONTH 1
-#define DEFAULT_DATE 11
+#define DEFAULT_MONTH 10
+#define DEFAULT_DATE 4
 #define DEFAULT_WEEKDAY 2
 #define DEFAULT_HOUR 0
 #define DEFAULT_MINUTE 0
@@ -83,8 +83,8 @@ Environment:
 #define FONT_DATA_OFFSET 32
 
 //
-// Define the number of seconds the button should be held down to move to the
-// next variable.
+// Define the number of seconds (plus one) the button should be held down to
+// move to the next variable.
 //
 
 #define INPUT_NEXT_TIME 2
@@ -265,7 +265,7 @@ volatile USHORT KeCurrentMilliseconds;
 // Store whether the current time is being kept in military time or not.
 //
 
-volatile UCHAR KeMilitaryTime = TRUE;
+volatile UCHAR KeMilitaryTime = FALSE;
 
 //
 // Store the number of milliseconds that have passed, useful for stalling. This
@@ -278,7 +278,7 @@ volatile ULONG HlRawMilliseconds;
 // Store the various strings used.
 //
 
-CHAR KeBirthdayMessage[] PROGMEM = "Happy Birthday Caitlin! ";
+CHAR KeBirthdayMessage[] PROGMEM = "Happy Birthday Jason! ";
 CHAR KeJanuaryString[] PROGMEM = "January";
 CHAR KeFebruaryString[] PROGMEM = "February";
 CHAR KeMarchString[] PROGMEM = "March";
@@ -830,7 +830,7 @@ Return Value:
                                  &(HlFontData5x7[Character][CharacterColumn]));
 
             //
-            // Bail immediately and blank the screenif the user pushed the
+            // Bail immediately and blank the screen if the user pushed the
             // button.
             //
 
