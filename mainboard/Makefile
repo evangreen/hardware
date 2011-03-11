@@ -21,19 +21,19 @@
 #
 ################################################################################
 
-BINARY1 := mainboard
+BINARY := mainboard
 
-OBJS1 := clock.o     \
-         mainboard.o \
-         life.o      \
-         sokoban.o   \
-         sokodata.o  \
-         tetris.o    \
+OBJS := clock.o     \
+        mainboard.o \
+        life.o      \
+        sokoban.o   \
+        sokodata.o  \
+        tetris.o    \
 
-X86_OBJS1 := fontdata.o \
-             x86\winmain.o \
+X86_OBJS := fontdata.o \
+            x86\winmain.o \
 
-AVR_OBJS1 := avr/avrmain.o
+AVR_OBJS := avr/avrmain.o
 
 MCU = atmega328p
 
@@ -61,7 +61,7 @@ LD = ld
 RCC = windres
 AR = ar rcs
 AS = as
-BINARY1 := $(BINARY1).exe
+BINARY := $(BINARY).exe
 endif
 
 ifeq (avr, $(ARCH))
@@ -78,13 +78,13 @@ endif
 # Paths are separated by colons.
 #
 
-VPATH = .:$(OBJROOT):
+VPATH = .:..:$(OBJROOT):
 
 #
 # Compiler and linker flags
 #
 
-CCOPTIONS = -Wall -Werror -Os -gstabs+ -I.
+CCOPTIONS = -Wall -Werror -Os -gstabs+ -I. -I..
 
 ifeq (avr, $(ARCH))
 CCOPTIONS += -mcall-prologues -funsigned-char -funsigned-bitfields \
@@ -109,7 +109,7 @@ ASOPTIONS = --gstabs+                                           \
 
 .PHONY: prebuild all clean
 
-all: $(OBJROOT) $(BINROOT) $(BINARY1) $(BINARY2)
+all: $(OBJROOT) $(BINROOT) $(BINARY)
 
 #
 # The dependencies of the binary object depend on the architecture and type of
@@ -117,17 +117,17 @@ all: $(OBJROOT) $(BINROOT) $(BINARY1) $(BINARY2)
 #
 
 ifeq (x86, $(ARCH))
-ALLOBJS1 = $(OBJS1) $(X86_OBJS1)
+ALLOBJS = $(OBJS) $(X86_OBJS)
 endif
 
 ifeq (avr, $(ARCH))
-ALLOBJS1 = $(OBJS1) $(AVR_OBJS1)
-$(BINARY1): $(BINARY1).elf
+ALLOBJS = $(OBJS) $(AVR_OBJS)
+$(BINARY): $(BINARY).elf
 	@cd $(OBJROOT) && $(OBJCOPY) -O binary -R .eeprom -R .fuse -R .lock -R .signature $^ $@
-	@echo Binplacing - $(OBJROOT)/$(BINARY1)
-	@cp -f $(OBJROOT)/$(BINARY1) $(BINROOT)/
+	@echo Binplacing - $(OBJROOT)/$(BINARY)
+	@cp -f $(OBJROOT)/$(BINARY) $(BINROOT)/
 
-$(BINARY1).elf: $(ALLOBJS1)
+$(BINARY).elf: $(ALLOBJS)
 	@echo Linking - $@
 	@cd $(OBJROOT) && $(CC) -lm $(CCOPTIONS) $(LDOPTIONS) -o $@ $^
 	@cd $(OBJROOT) && $(SIZE) --mcu=$(MCU) --format=avr $@
@@ -135,15 +135,15 @@ $(BINARY1).elf: $(ALLOBJS1)
 endif
 
 ifeq ($(ARCH),x86)
-$(BINARY1): $(ALLOBJS1)
+$(BINARY): $(ALLOBJS)
 	@echo Linking - $@
 	@cd $(OBJROOT) && $(CC) -mwindows -o $@ $^ -lwinmm
-	@echo Binplacing - $(OBJROOT)\$(BINARY1)
-	@xcopy /Y /I /Q $(OBJROOT)\$(BINARY1) $(BINROOT)\ > nul
+	@echo Binplacing - $(OBJROOT)\$(BINARY)
+	@xcopy /Y /I /Q $(OBJROOT)\$(BINARY) $(BINROOT)\ > nul
 
 makesoko.exe: makesoko.o
 	@echo Linking - $@
-	@cd $(OBJROOT) && $(CC) -o $@ $^
+	@cd $(OBJROOT) && $(CC) $(CCOPTIONS) -o $@ $^
 
 endif
 
@@ -155,7 +155,7 @@ endif
 
 sokodata.o: sokodata.c
 	@echo Compiling - $<
-	@cd $(OBJROOT) && $(CC) -I$(CURDIR) $(CCOPTIONS) -c -o $(OBJROOT)/$@ $<
+	@cd $(OBJROOT) && $(CC) -I$(CURDIR) -I$(CURDIR)/.. $(CCOPTIONS) -c -o $(OBJROOT)/$@ $<
 
 sokodata.c: makesoko.exe sokolevels.txt sokoban.h
 	@echo Creating - $@
