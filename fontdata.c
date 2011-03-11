@@ -25,13 +25,12 @@ Environment:
 //
 
 #include "types.h"
-#include "mainboard.h"
 
 //
 // ----------------------------------------------------------------------- Data
 //
 
-UCHAR KeFontData3x5[][2] = {
+UCHAR KeFontData3x5[][2] PROGMEM = {
     {0xfc, 0x7e}, // 0
     {0x4f, 0xc2}, // 1
     {0xbd, 0x7a}, // 2
@@ -73,7 +72,7 @@ UCHAR KeFontData3x5[][2] = {
     {0x9d, 0x72}, // Z
 };
 
-UCHAR KeFontData5x7[][5] = {
+UCHAR KeFontData5x7[][5] PROGMEM = {
     {0x00, 0x00, 0x00, 0x00, 0x00},   //   0x 0 0
     {0x64, 0x18, 0x04, 0x64, 0x18},   //  0x 1 1 n
     {0x3c, 0x40, 0x40, 0x20, 0x7c},   //  0x 2 2 u

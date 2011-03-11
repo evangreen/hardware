@@ -22,9 +22,12 @@ Author:
 
 #ifdef _AVR_
 
-#include <avr/pgmspace.h>
+//
+// Define types that point to program memory.
+//
 
-typedef PGM_P PPGM;
+#define PROGMEM __attribute__((__progmem__))
+typedef const char PROGMEM *PPGM;
 
 #else
 

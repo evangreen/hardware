@@ -1,7 +1,7 @@
 ; Original & Extra
 
 ; Copyright: Thinking Rabbit
-; E-Mail: 
+; E-Mail:
 ; Web Site: http://www.sourcecode.se/sokoban/levtext.php?file=Original.slc
 ;
 ; The first 20 original levels.
