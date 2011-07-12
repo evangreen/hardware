@@ -299,10 +299,13 @@ extern    void    usb_out ( byte_t* data, byte_t len )
 __attribute__((naked))        // suppress redundant SP initialization
 extern    int    main ( void )
 {
-  PORTD |= _BV(4);
-  DDRD = _BV(6) | _BV(5) | _BV(4); // setup USB pullup, LED pin and buffer select pins to output
+  //PORTD |= _BV(4);
+  //DDRD = _BV(6) | _BV(5) | _BV(4); // setup USB pullup, LED pin and buffer select pins to output
+  DDRB |= _BV(2) | _BV(6);
+  DDRD |= _BV(0) | _BV(1) | _BV(2);
   usb_init();
-  PORTD = _BV(6) | _BV(4); // pull pull-up and buffer disable high
+  //PORTD = _BV(6) | _BV(4); // pull pull-up and buffer disable high
+  PORTB |= _BV(2) | _BV(6);
 
   for    ( ;; )
     {

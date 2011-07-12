@@ -10,8 +10,8 @@
 // The D+ and D- USB signals should be connected to two pins of the same
 // I/O port. The following macros define the port letter and the input
 // bit numbers:
-#define    USBTINY_PORT            D
-#define    USBTINY_DPLUS            2
+#define    USBTINY_PORT            B
+#define    USBTINY_DPLUS            4
 #define    USBTINY_DMINUS            3
 
 // The D+ signal should be connected to an interrupt input to trigger an
@@ -19,7 +19,15 @@
 // D+ USB signal and the interrupt input, only two I/O pins are needed
 // for the USB interface. The following macro defines the interrupt
 // number:
-#define    USBTINY_INT            0
+#define    USBTINY_INT            1
+
+// Optional definition of the I/O pin to control the 1K5 pullup of the
+// D- signal. This will force a reconnect after RESET. (+4 bytes)
+#undef USBTINY_DMINUS_PULLUP
+
+// Optional definition of the I/O pin to drive the "USB OK" LED, that
+// will turn on when the host has assigned a device address. (+6 bytes)
+#undef USBTINY_USB_OK_LED
 
 // The power requirement of the USB device in mA, or 0 when the device
 // is not bus powered:
@@ -70,6 +78,11 @@
 // You need this option to send data from the host to the device in
 // a control transfer.
 #define    USBTINY_CALLBACK_OUT        1
+
+// When this macro is defined as 1, an optimized CRC function is used
+// that calculates the CRC about twice as fast as the standard version,
+// but at the expense of 42 bytes of additional flash memory.
+//#define USBTINY_FAST_CRC 1
 
 // Set the macro USBTINY_ENDPOINT to 1 to add an additional endpoint,
 // according to the values of the three other macros.

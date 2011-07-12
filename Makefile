@@ -29,6 +29,7 @@ OBJS1 := crc.o           \
 		 usbled.o        \
 
 MCU = attiny2313
+PROGMCU = attiny4313
 
 #
 # Define the object and image root.
@@ -80,18 +81,16 @@ VPATH = .:$(OBJROOT):
 CCOPTIONS = -Wall -Werror -Os -gstabs+ -I.
 
 ifeq (avr, $(ARCH))
-CCOPTIONS += -mcall-prologues -funsigned-char -funsigned-bitfields \
-             -fpack-struct -fshort-enums -Wstrict-prototypes \
-             -mmcu=$(MCU) -D_AVR_
+CCOPTIONS += -mmcu=$(MCU) -D_AVR_
 endif
 
-LDOPTIONS = -Wl,-Map=$@.map
+LDOPTIONS = -g -Wl,-Map=$@.map
 
 #
 # Assembler flags:
 #
 
-ASOPTIONS = -mmcu=$(MCU) -c -x assembler-with-cpp
+ASOPTIONS = -mmcu=$(MCU) -Os -c -x assembler-with-cpp
 
 #
 # Makefile targets. .PHONY specifies that the following targets don't actually
@@ -103,7 +102,7 @@ ASOPTIONS = -mmcu=$(MCU) -c -x assembler-with-cpp
 all: $(OBJROOT) $(BINROOT) $(BINARY)
 
 program: all
-	avrdude -c usbtiny -p$(MCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0x01:m
+	avrdude -c usbtiny -p$(PROGMCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xef:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
 
 #
 # The dependencies of the binary object depend on the architecture and type of

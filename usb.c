@@ -17,10 +17,10 @@
 // the callback functions usb_in() and usb_out() will be called for IN
 // and OUT transfers.
 //
-// Maximum stack usage (gcc 3.4.3 & 4.1.0) of usb_poll(): 5 bytes plus
+// Maximum stack usage (gcc 4.1.0 & 4.3.4) of usb_poll(): 5 bytes plus
 // possible additional stack usage in usb_setup(), usb_in() or usb_out().
 //
-// Copyright (C) 2006 Dick Streefland
+// Copyright 2006-2010 Dick Streefland
 //
 // This is free software, licensed under the terms of the GNU General
 // Public License as published by the Free Software Foundation.
@@ -58,7 +58,8 @@ byte_t    usb_rx_token;            // PID of token packet: SETUP or OUT
 byte_t    usb_tx_buf[USB_BUFSIZE];    // output buffer
 byte_t    usb_tx_len;            // output buffer size, 0 means empty
 
-byte_t    usb_address;            // assigned USB address
+byte_t    usb_address;            // assigned device address
+byte_t    usb_new_address;        // new device address
 
 // ----------------------------------------------------------------------
 // Local data
@@ -75,7 +76,6 @@ enum
 static    byte_t    usb_tx_state;        // TX_STATE_*, see enum above
 static    byte_t    usb_tx_total;        // total transmit size
 static    byte_t*    usb_tx_data;        // pointer to data to transmit
-static    byte_t    new_address;        // new device address
 
 #if    defined USBTINY_VENDOR_NAME
 struct
@@ -223,7 +223,10 @@ static    void    usb_receive ( byte_t* data, byte_t rx_len )
             }
             else if    ( data[1] == 5 )    // SET_ADDRESS
             {
-                new_address = data[2];
+                usb_new_address = data[2];
+#ifdef    USBTINY_USB_OK_LED
+                SET(USBTINY_USB_OK_LED);// LED on
+#endif
             }
             else if    ( data[1] == 6 )    // GET_DESCRIPTOR
             {
@@ -237,9 +240,6 @@ static    void    usb_receive ( byte_t* data, byte_t rx_len )
                 {    // CONFIGURATION
                     data = (byte_t*) &descr_config;
                     len = sizeof(descr_config);
-                    // If we got this far, there's a good chance everything is OK with enumeration so turn on the OK led
-                    PORTD |= _BV(5);
-
                 }
 #if    VENDOR_NAME_ID || DEVICE_NAME_ID || SERIAL_ID
                 else if    ( data[3] == 3 )
@@ -374,6 +374,13 @@ extern    void    usb_init ( void )
 {
     USB_INT_CONFIG |= USB_INT_CONFIG_SET;
     USB_INT_ENABLE |= (1 << USB_INT_ENABLE_BIT);
+#ifdef    USBTINY_USB_OK_LED
+    OUTPUT(USBTINY_USB_OK_LED);
+#endif
+#ifdef    USBTINY_DMINUS_PULLUP
+    SET(USBTINY_DMINUS_PULLUP);
+    OUTPUT(USBTINY_DMINUS_PULLUP);    // enable pullup on D-
+#endif
     sei();
 }
 
@@ -395,16 +402,9 @@ extern    void    usb_poll ( void )
         usb_rx_len = 0;    // accept next packet
     }
     // refill an empty transmit buffer, when the transmitter is active
-    if    ( usb_tx_len == 0 )
+    if    ( usb_tx_len == 0 && usb_tx_state != TX_STATE_IDLE )
     {
-        if    ( usb_tx_state != TX_STATE_IDLE )
-        {
-            usb_transmit();
-        }
-        else
-        {    // change the USB address at the end of a transfer
-            usb_address = new_address;
-        }
+        usb_transmit();
     }
     // check for USB bus reset
     for    ( i = 10; i > 0 && ! (USB_IN & USB_MASK_DMINUS); i-- )
@@ -412,6 +412,10 @@ extern    void    usb_poll ( void )
     }
     if    ( i == 0 )
     {    // SE0 for more than 2.5uS is a reset
-        new_address = 0;
+        usb_new_address = 0;
+        usb_address = 0;
+#ifdef    USBTINY_USB_OK_LED
+        CLR(USBTINY_USB_OK_LED);    // LED off
+#endif
     }
 }
