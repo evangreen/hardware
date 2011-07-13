@@ -19,7 +19,13 @@
 // D+ USB signal and the interrupt input, only two I/O pins are needed
 // for the USB interface. The following macro defines the interrupt
 // number:
-#define    USBTINY_INT            1
+
+//
+// EVAN: Undefine this as the interrupt is on a Pin Change interrupt, not
+// INT0/1.
+//
+
+//#define    USBTINY_INT            1
 
 // Optional definition of the I/O pin to control the 1K5 pullup of the
 // D- signal. This will force a reconnect after RESET. (+4 bytes)
