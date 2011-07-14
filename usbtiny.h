@@ -11,8 +11,8 @@
 // I/O port. The following macros define the port letter and the input
 // bit numbers:
 #define    USBTINY_PORT            B
-#define    USBTINY_DPLUS            4
-#define    USBTINY_DMINUS            3
+#define    USBTINY_DPLUS           4
+#define    USBTINY_DMINUS          3
 
 // The D+ signal should be connected to an interrupt input to trigger an
 // interrupt at the start of a packet. When you use the same pin for the
@@ -46,18 +46,17 @@
 // www.voti.nl or www.mecanique.co.uk, or be naughty and use something
 // else, like for instance product ID 0x6666, which is registered as
 // "Prototype product Vendor ID".
-//#define    USBTINY_VENDOR_ID        0x1B4F // SparkFun VendorID
-//#define    USBTINY_DEVICE_ID        0x0003 // SparkFun Product ID #3
-#define    USBTINY_VENDOR_ID        0x1781 // SparkFun Licensed VendorID
-#define    USBTINY_DEVICE_ID        0x0C9F // SparkFun Licensed ProductID
+
+#define    USBTINY_VENDOR_ID        0x0F68
+#define    USBTINY_DEVICE_ID        0x1986
 
 // The version of the device as a 16-bit number: 256*major + minor.
-#define    USBTINY_DEVICE_VERSION        0x104
+#define    USBTINY_DEVICE_VERSION        0x101
 
 // The following optional macros may be used as an identification of
 // your device. Undefine them when you run out of flash space.
-//#define    USBTINY_VENDOR_NAME        "Dick Streefland"
-//#define    USBTINY_DEVICE_NAME        "USBtiny"
+#define    USBTINY_VENDOR_NAME        "One Ring Road"
+#define    USBTINY_DEVICE_NAME        "USB LED Display"
 #undef    USBTINY_SERIAL
 
 // Define the device class, subclass and protocol. Device class 0xff
