@@ -24,9 +24,10 @@
 BINARY := usbledmini
 
 OBJS1 := crc.o           \
-		 int.o           \
+         int.o           \
+         spi.o           \
          usb.o           \
-		 usbled.o        \
+         usbled.o        \
 
 MCU = attiny2313
 PROGMCU = attiny4313

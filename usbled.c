@@ -1,15 +1,44 @@
-// ======================================================================
-// Control a parallel port AVR programmer (avrdude type "bsd") via USB.
-//
-// Copyright (C) 2006 Dick Streefland
-//
-// This is free software, licensed under the terms of the GNU General
-// Public License as published by the Free Software Foundation.
-//
-// ======================================================================
+/*++
 
+Copyright (C) 2006 Dick Streefland
+Copyright (c) 2010 Evan Green
+
+Module Name:
+
+    usbled.c
+
+Abstract:
+
+    This module implements the USB LED controller firmware.
+
+Author:
+
+    Evan Green 12-Jul-2011
+    Adapted from Dick Streefland's USBTiny project.
+
+    This is free software, licensed under the terms of the GNU General
+    Public License as published by the Free Software Foundation.
+
+Environment:
+
+    AVR
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include <avr/pgmspace.h>
 #include <avr/io.h>
 #include "usb.h"
+#include "usbled.h"
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+#define USBLED_DIGIT_COUNT 16
 
 enum
 {
@@ -63,9 +92,59 @@ enum
 #define    PIN        PINB
 #define    MISO_MASK    _BV(MISO)
 
-// ----------------------------------------------------------------------
-// Local data
-// ----------------------------------------------------------------------
+//
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+void
+WriteSpiByte (
+    unsigned char Byte
+    );
+
+/*++
+
+Routine Description:
+
+    This routine bit bangs a byte LSB first out onto a wire, toggling a SPI
+    clock as well. The data is changed on the falling edge of the clock.
+
+    This routine assumes that both the data line and clock line are held low.
+    At the end of this routine, the data line and clock line will both be low.
+
+Arguments:
+
+    Byte - Supplies the byte to write out to the SPI bus.
+
+Return Value:
+
+    None.
+
+--*/
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+unsigned char DigitState[USBLED_DIGIT_COUNT];
+static unsigned char CharacterToDigit[] PROGMEM = {
+    0xAF, // 0
+    0x21, // 1
+    0xCD, // 2
+    0x6D, // 3
+    0x63, // 4
+    0x6E, // 5
+    0xEE, // 6
+    0x25, // 7
+    0xEF, // 8
+    0x6F, // 9
+    0xE7, // A
+    0xEA, // b
+    0xC8, // c
+    0xE9, // d
+    0xCE, // E
+    0xC6, // F
+};
+
 static    byte_t        sck_period;    // SCK period in microseconds (1..250)
 static    byte_t        poll1;        // first poll byte for write
 static    byte_t        poll2;        // second poll byte for write
@@ -74,6 +153,10 @@ static    uint_t        timeout;    // write timeout in usec
 static    byte_t        cmd0;        // current read/write command byte
 static    byte_t        cmd[4];        // SPI command buffer
 static    byte_t        res[4];        // SPI result buffer
+
+//
+// ------------------------------------------------------------------ Functions
+//
 
 // ----------------------------------------------------------------------
 // Delay exactly <sck_period> times 0.5 microseconds (6 cycles).
@@ -293,23 +376,119 @@ extern    void    usb_out ( byte_t* data, byte_t len )
     }
 }
 
-// ----------------------------------------------------------------------
-// Main
-// ----------------------------------------------------------------------
-__attribute__((naked))        // suppress redundant SP initialization
-extern    int    main ( void )
-{
-  //PORTD |= _BV(4);
-  //DDRD = _BV(6) | _BV(5) | _BV(4); // setup USB pullup, LED pin and buffer select pins to output
-  DDRB |= _BV(2) | _BV(6);
-  DDRD |= _BV(0) | _BV(1) | _BV(2);
-  usb_init();
-  //PORTD = _BV(6) | _BV(4); // pull pull-up and buffer disable high
-  PORTB |= _BV(2) | _BV(6);
+__attribute__((naked))
+extern
+int
+main (
+    void
+    )
 
-  for    ( ;; )
-    {
-      usb_poll();
+/*++
+
+Routine Description:
+
+    This routine is the initial entry point into the firmware code. It is
+    called directly from the reset vector after some basic C library setup.
+    The "naked" attribute suppresses redundant stack pointer initialization.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    This function never returns.
+
+--*/
+
+{
+
+    unsigned char Column;
+
+    //
+    // Set up the I/O port initial values and data direction registers.
+    //
+
+    PORTB = PORTB_INITIAL_VALUE;
+    DDRB = PORTB_DATA_DIRECTION_VALUE;
+    PORTD = PORTD_INITIAL_VALUE;
+    DDRD = PORTD_DATA_DIRECTION_VALUE;
+
+    //
+    // Initialize the LEDs.
+    //
+
+    for (Column = 0; Column < USBLED_DIGIT_COUNT; Column += 1) {
+        DigitState[Column] = pgm_read_byte(&(CharacterToDigit[Column]));
     }
-  return 0;
+
+    //
+    // Initialize the USB library.
+    //
+
+    usb_init();
+
+    //
+    // Enable the pullup resistor, which officially tells the USB bus that
+    // there is a device here.
+    //
+
+    PORTB |= USB_PULLUP_PIN;
+
+    //
+    // Enter the main program loop.
+    //
+
+    Column = 0;
+    while (1) {
+
+        //
+        // Respond to USB events.
+        //
+
+        usb_poll();
+
+        //
+        // Flip the data into the register.
+        //
+
+        PORTB |= SHIFT_REGISTER_CS;
+        if (Column == 5) {
+            PORTB |= SELECT_DIGIT0;
+
+        } else {
+            PORTD |= 1 << ((4 - Column) & 0x7);
+        }
+
+        //
+        // Write out the next bytes.
+        //
+
+        WriteSpiByte(DigitState[Column + 8]);
+        WriteSpiByte(DigitState[Column]);
+
+        //
+        // Turn the selector off.
+        //
+
+        PORTB &= ~SELECT_DIGIT0;
+        PORTD = 0;
+        PORTB &= ~SHIFT_REGISTER_CS;
+
+        //
+        // Move to the next column.
+        //
+
+        Column += 1;
+        if (Column == 8) {
+            Column = 0;
+        }
+    }
+
+    return 0;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
