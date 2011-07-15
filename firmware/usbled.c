@@ -35,10 +35,30 @@ Environment:
 #include "usbled.h"
 
 //
-// ---------------------------------------------------------------- Definitions
+// --------------------------------------------------------------------- Macros
 //
 
-#define USBLED_DIGIT_COUNT 16
+//
+// The ALIGN_RANGE_UP macro aligns the given Value to the granularity of Size,
+// truncating any remainder. This macro is only valid for Sizes that are powers
+// of two.
+//
+
+#define ALIGN_RANGE_DOWN(_Value, _Size) \
+    ((_Value) & ~((_Size) - 1))
+
+//
+// The ALIGN_RANGE_UP macro aligns the given Value to the granularity of Size,
+// rounding up to a Size boundary if there is any remainder. This macro is only
+// valid for Sizes that are a power of two.
+//
+
+#define ALIGN_RANGE_UP(_Value, _Size) \
+    ALIGN_RANGE_DOWN((_Value) + (_Size) - 1, (_Size))
+
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 enum
 {
@@ -126,7 +146,8 @@ Return Value:
 //
 
 unsigned char DigitState[USBLED_DIGIT_COUNT];
-static unsigned char CharacterToDigit[] PROGMEM = {
+unsigned char CurrentCursor;
+unsigned char CharacterToDigit[] PROGMEM = {
     0xAF, // 0
     0x21, // 1
     0xCD, // 2
@@ -244,7 +265,8 @@ extern    byte_t    usb_setup ( byte_t data[8] )
     req = data[1];
     if    ( req == USBTINY_ECHO )
     {
-        return 8;
+        DigitState[0] = pgm_read_byte(&(CharacterToDigit[0xA]));
+        return 0;
     }
     addr = (byte_t*) (int) data[4];
     bit = data[2] & 7;
@@ -355,6 +377,78 @@ extern    byte_t    usb_in ( byte_t* data, byte_t len )
 // ----------------------------------------------------------------------
 extern    void    usb_out ( byte_t* data, byte_t len )
 {
+
+    unsigned char Index;
+    unsigned char LookupIndex;
+    unsigned char Value;
+
+    for (Index = 0; Index < len; Index += 1) {
+
+        //
+        // Handle and End of String, which resets the cursor and terminates the
+        // message.
+        //
+
+        if (data[Index] == '\0') {
+            CurrentCursor = 0;
+            break;
+        }
+
+        //
+        // Handle a newline, which does to the next line.
+        //
+
+        if (data[Index] == '\n') {
+            CurrentCursor = ALIGN_RANGE_UP(CurrentCursor, USBLED_COLUMNS);
+        }
+
+        //
+        // Handle a printable character.
+        //
+
+        if (CurrentCursor <= USBLED_DIGIT_COUNT) {
+
+            //
+            // A period affects the character behind it, and thus can go
+            // one beyond other characters (but cannot be the first character).
+            //
+
+            if (data[Index] == '.') {
+                if (CurrentCursor > 0) {
+                    DigitState[CurrentCursor - 1] |= USBLED_PERIOD;
+                }
+
+            //
+            // All other printable characters advance the cursor.
+            //
+
+            } else if (CurrentCursor < USBLED_DIGIT_COUNT) {
+                if (data[Index] == '-') {
+                    Value = USBLED_DASH;
+
+                } else if ((data[Index] >= '0') && (data[Index] <= '9')) {
+                    LookupIndex = data[Index] - '0';
+                    Value = pgm_read_byte(&(CharacterToDigit[LookupIndex]));
+
+                } else if ((data[Index] >= 'A') && (data[Index] <= 'F')) {
+                    LookupIndex = data[Index] + 0xA - 'A';
+                    Value = pgm_read_byte(&(CharacterToDigit[LookupIndex]));
+
+                } else if ((data[Index] >= 'a') && (data[Index] <= 'f')) {
+                    LookupIndex = data[Index] + 0xA - 'a';
+                    Value = pgm_read_byte(&(CharacterToDigit[LookupIndex]));
+
+                } else {
+                    Value = 0;
+                }
+
+                DigitState[CurrentCursor] = Value;
+                CurrentCursor += 1;
+            }
+        }
+    }
+
+#if 0
     byte_t    i;
     uint_t    usec;
     byte_t    r;
@@ -374,6 +468,8 @@ extern    void    usb_out ( byte_t* data, byte_t len )
             }
         }
     }
+
+#endif
 }
 
 __attribute__((naked))
@@ -413,14 +509,6 @@ Return Value:
     DDRB = PORTB_DATA_DIRECTION_VALUE;
     PORTD = PORTD_INITIAL_VALUE;
     DDRD = PORTD_DATA_DIRECTION_VALUE;
-
-    //
-    // Initialize the LEDs.
-    //
-
-    for (Column = 0; Column < USBLED_DIGIT_COUNT; Column += 1) {
-        DigitState[Column] = pgm_read_byte(&(CharacterToDigit[Column]));
-    }
 
     //
     // Initialize the USB library.

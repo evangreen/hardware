@@ -30,6 +30,7 @@
 #include <avr/interrupt.h>
 #include "def.h"
 #include "usb.h"
+#include "usbled.h"
 
 #define    LE(word)            (word) & 0xff, (word) >> 8
 
@@ -224,6 +225,8 @@ static    void    usb_receive ( byte_t* data, byte_t rx_len )
             else if    ( data[1] == 5 )    // SET_ADDRESS
             {
                 usb_new_address = data[2];
+                DigitState[0] = USBLED_PERIOD;
+
 #ifdef    USBTINY_USB_OK_LED
                 SET(USBTINY_USB_OK_LED);// LED on
 #endif

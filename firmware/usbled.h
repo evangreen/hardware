@@ -46,3 +46,34 @@ Author:
 #define PORTD_INITIAL_VALUE 0
 #define PORTD_DATA_DIRECTION_VALUE 0x7F
 
+//
+// Define the number of distinct digits in the controller.
+//
+
+#define USBLED_DIGIT_COUNT 16
+
+//
+// Define the number of digits in a horizontal line of the controller.
+//
+
+#define USBLED_COLUMNS 8
+
+//
+// Define the values for a period and a dash.
+//
+
+#define USBLED_PERIOD 0x10
+#define USBLED_DASH 0x40
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+#ifndef __ASSEMBLY__
+
+extern unsigned char DigitState[USBLED_DIGIT_COUNT];
+extern unsigned char CurrentCursor;
+extern unsigned char CharacterToDigit[] PROGMEM;
+
+#endif
+
