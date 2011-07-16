@@ -37,12 +37,55 @@ Environment:
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include "usb.h"
+#include "ossup.h"
+
+//
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro prints out the given printf-style statement if verbose mode is
+// turned on.
+//
+
+#define VERBOSE_PRINT(...)      \
+    if (Options.Verbose != 0) { \
+        printf(__VA_ARGS__);    \
+    }
 
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+#define USAGE_STRING \
+    "USBLED is a program that allows the user to control the USB LED and \n"   \
+    "USB LED Mini controllers. It can be run from the command line with the \n"\
+    "following usage:\n\n" \
+    "usbled [-v] \"<value>\"\n\n" \
+    "    -v  Verbose. Add this variable if you're having trouble and would \n" \
+    "        like to see more output.\n\n" \
+    "    <value> - The value to display on the LED display, in quotes if \n" \
+    "              there are spaces in the string. The LED display can \n" \
+    "              accept the characters 0-9, A-F, dashes (-), spaces, and \n" \
+    "              periods. It also accepts \\n to jump to the second line.\n" \
+    "              All characters after the last digit will be ignored.\n\n" \
+    "Examples:\n\n" \
+    "usbled \"01.234 56\" prints 0123456 on the LED display, turning on the \n"\
+    "    decimal point for the second character and leaving the 6th \n" \
+    "    character blank.\n\n" \
+    "Troubleshooting:\n\n" \
+    "    If the app hangs, ensure that the USB LED device is plugged in. If \n"\
+    "    successfully connected, the device will turn on the first decimal \n"\
+    "    place LED. Try turning on verbose mode (-v) to see what the app \n" \
+    "    is waiting for. If the device is connected but the app still says \n" \
+    "    \"Waiting for device\", check to ensure the drivers for the device \n"\
+    "    are properly installed. On Windows, the Device manager should show \n"\
+    "    the device under \"LibUSB-Win32 Devices\". For more detailed \n" \
+    "    instructions and to download the latest drivers, head to \n"\
+    "    www.oneringroad.com.\n\n"
 
 //
 // Define the vendor and device ID of the USB LED controller.
@@ -66,8 +109,25 @@ Environment:
 #define USBLED_TIMEOUT 500
 
 //
+// Define the default update interval, in milliseconds.
+//
+
+#define USBLED_DEFAULT_UPDATE_INTERVAL 750
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef struct _OPTION_LIST {
+    int Verbose;
+    int CpuUsage;
+    int CpuMemoryUsage;
+    int NetworkUsage;
+    int CurrentTime;
+    int MilitaryTime;
+    int UpdateInterval;
+    char *StringToWrite;
+} OPTION_LIST, *POPTION_LIST;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -114,9 +174,42 @@ MillisecondSleep (
     unsigned int Milliseconds
     );
 
+int
+WriteStringToLeds (
+    usb_dev_handle *Handle,
+    char *String
+    );
+
+void
+ShowCpuUsage (
+    usb_dev_handle *Handle,
+    int UpdateInterval
+    );
+
+void
+ShowCpuMemoryUsage (
+    usb_dev_handle *Handle,
+    int UpdateInterval
+    );
+
+void
+ShowNetworkUsage (
+    usb_dev_handle *Handle,
+    int UpdateInterval
+    );
+
+void
+ShowCurrentDateAndTime (
+    usb_dev_handle *Handle,
+    int MilitaryTime,
+    int UpdateInterval
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+OPTION_LIST Options;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -150,6 +243,7 @@ Return Value:
 
 {
 
+    char *Argument;
     struct usb_device *Device;
     int DevicesChanged;
     usb_dev_handle *Handle;
@@ -158,6 +252,102 @@ Return Value:
     struct usb_bus *UsbBus;
 
     Handle = NULL;
+    Options.UpdateInterval = USBLED_DEFAULT_UPDATE_INTERVAL;
+
+    //
+    // Process the command line options
+    //
+
+    while ((argc > 1) && (argv[1][0] == '-')) {
+        Argument = &(argv[1][1]);
+
+        //
+        // 'v' specifies verbose mode.
+        //
+
+        if (strcmp(Argument, "v") == 0) {
+            Options.Verbose = TRUE;
+
+        //
+        // 'c' specifies per-processor CPU usage.
+        //
+
+        } else if (strcmp(Argument, "c") == 0) {
+            Options.CpuUsage = TRUE;
+
+        //
+        // 'm' specifies aggregate CPU and memory usage.
+        //
+
+        } else if (strcmp(Argument, "m") == 0) {
+            Options.CpuMemoryUsage = TRUE;
+
+        //
+        // 'n' specifies network statistics.
+        //
+
+        } else if (strcmp(Argument, "n") == 0) {
+            Options.NetworkUsage = TRUE;
+
+        //
+        // 't' specifies the current date and time.
+        //
+
+        } else if (strcmp(Argument, "t") == 0) {
+            Options.CurrentTime = TRUE;
+
+        } else if (strcmp(Argument, "u") == 0) {
+            Options.MilitaryTime = TRUE;
+
+        //
+        // 'u' specifies the update interval, in milliseconds.
+        //
+
+        } else if (strcmp(Argument, "u") == 0) {
+            if ((argc <= 2) || (argv[2][0] == '-')) {
+                printf("Error: -u requires an integer argument after it.\n");
+                printf(USAGE_STRING);
+                return 1;
+            }
+
+            Options.UpdateInterval = strtol(argv[2], NULL, 10);
+            if (Options.UpdateInterval <= 0) {
+                Options.UpdateInterval = USBLED_DEFAULT_UPDATE_INTERVAL;
+            }
+
+        } else if ((strcmp(Argument, "h") == 0) ||
+                   (stricmp(Argument, "-help") == 0)) {
+
+            printf(USAGE_STRING);
+            return 1;
+
+        } else {
+            printf("%s: Invalid option\n\n%s", Argument, USAGE_STRING);
+            return 1;
+        }
+
+        argc -= 1;
+        argv += 1;
+    }
+
+    //
+    // If a string was not provided and another appropriate option wasn't used,
+    // then fail and print the usage.
+    //
+
+    if ((argc < 2) &&
+        (Options.CpuUsage == 0) &&
+        (Options.CpuMemoryUsage == 0) &&
+        (Options.NetworkUsage == 0) &&
+        (Options.CurrentTime == 0)) {
+
+        printf(USAGE_STRING);
+        return 1;
+    }
+
+    if (argc >= 2) {
+        Options.StringToWrite = argv[1];
+    }
 
     //
     // Initialize libUSB.
@@ -171,7 +361,7 @@ Return Value:
     //
 
     Device = NULL;
-    printf("Looking for device...\n");
+    VERBOSE_PRINT("Looking for device...\n");
     while (Device == NULL) {
         DevicesChanged = usb_find_devices();
 
@@ -231,38 +421,41 @@ Return Value:
     //
 
     if (Device != NULL) {
-        PrintDeviceDescription(Device);
+        if (Options.Verbose != 0) {
+            PrintDeviceDescription(Device);
+        }
+
         Handle = ConfigureDevice(Device);
         if (Handle == NULL) {
             goto mainEnd;
         }
 
-        Result = usb_control_msg(Handle,
-                                 USB_TYPE_VENDOR | USB_RECIP_DEVICE,
-                                 0,
-                                 0x1234,
-                                 0x5678,
-                                 "01\nabc.",
-                                 strlen("01\nabc.") + 1,
-                                 USBLED_TIMEOUT);
-#if 0
+        //
+        // Attempt to enter the various infinite loops if requested.
+        //
 
-        Result = usb_bulk_write(Handle,
-                                USBLED_DEFAULT_ENDPOINT,
-                                (char *)&Result,
-                                sizeof(Result),
-                                USBLED_TIMEOUT);
+        if (Options.CpuUsage != 0) {
+            ShowCpuUsage(Handle, Options.UpdateInterval);
 
-#endif
+        } else if (Options.CpuMemoryUsage != 0) {
+            ShowCpuMemoryUsage(Handle, Options.UpdateInterval);
 
-        if (Result < 0) {
-            printf("Error writing command, wrote %d of %d bytes.\n"
-                   "Status: %s\n",
-                   Result,
-                   sizeof(Result),
-                   strerror(-Result));
+        } else if (Options.NetworkUsage != 0) {
+            ShowNetworkUsage(Handle, Options.UpdateInterval);
 
-            goto mainEnd;
+        } else if (Options.CurrentTime != 0) {
+            ShowCurrentDateAndTime(Handle, Options.MilitaryTime, 500);
+
+        //
+        // Write the string out.
+        //
+
+        } else {
+            Result = WriteStringToLeds(Handle, Options.StringToWrite);
+            if (Result < 0) {
+                printf("Error writing string to LEDs.\n");
+                goto mainEnd;
+            }
         }
     }
 
@@ -387,12 +580,12 @@ Return Value:
          RecursionIndex < RecursionLevel;
          RecursionIndex += 1) {
 
-        printf("--");
+        VERBOSE_PRINT("--");
     }
 
-    printf("%04x/%04x",
-           Device->descriptor.idVendor,
-           Device->descriptor.idProduct);
+    VERBOSE_PRINT("%04x/%04x",
+                  Device->descriptor.idVendor,
+                  Device->descriptor.idProduct);
 
     //
     // Return the device if it is a match.
@@ -401,11 +594,11 @@ Return Value:
     if ((Device->descriptor.idVendor == USBLED_VENDOR_ID) &&
         (Device->descriptor.idProduct == USBLED_PRODUCT_ID)) {
 
-        printf(" <-- Found Device.\n\n");
+        VERBOSE_PRINT(" <-- Found Device.\n\n");
         return Device;
 
     } else {
-        printf("\n");
+        VERBOSE_PRINT("\n");
     }
 
     //
@@ -761,3 +954,355 @@ Return Value:
 
     return;
 }
+
+int
+WriteStringToLeds (
+    usb_dev_handle *Handle,
+    char *String
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes the given null-terminated ASCII string to the LED
+    display.
+
+Arguments:
+
+    Handle - Supplies a pointer to the open device.
+
+    String - Supplies the string to write.
+
+Return Value:
+
+    Returns >= 0 on success.
+
+    Returns < 0 on failure.
+
+--*/
+
+{
+
+    int Result;
+
+    Result = usb_control_msg(Handle,
+                             USB_TYPE_VENDOR | USB_RECIP_DEVICE,
+                             0,
+                             0,
+                             0,
+                             String,
+                             strlen(String) + 1,
+                             USBLED_TIMEOUT);
+
+    if (Result < 0) {
+        printf("Error writing command, wrote %d of %d bytes.\n"
+               "Status: %s\n",
+               Result,
+               sizeof(Result),
+               strerror(-Result));
+    }
+
+    return Result;
+}
+
+void
+ShowCpuUsage (
+    usb_dev_handle *Handle,
+    int UpdateInterval
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enters a loop writing out the CPU usage onto the LEDs.
+
+Arguments:
+
+    Handle - Supplies the opened device handle.
+
+    UpdateInterval - Supplies the interval, in milliseconds, between updates
+        to the LED display.
+
+Return Value:
+
+    None. This function does not return, it enters an infinite loop until the
+    application is killed unless there is a failure.
+
+--*/
+
+{
+
+    int CpuCount;
+    int CpuUsage[4];
+    char String[40];
+
+    memset(CpuUsage, 0, sizeof(CpuUsage));
+    while (TRUE) {
+        CpuCount = GetProcessorUsage(CpuUsage, sizeof(CpuUsage));
+        if (CpuCount == 0) {
+            printf("Error getting CPU usage.\n");
+            return;
+        }
+
+        sprintf(String,
+                "%5.1f%5.1f%5.1f%5.1f",
+                (double)(CpuUsage[0] / 10.0),
+                (double)(CpuUsage[1] / 10.0),
+                (double)(CpuUsage[2] / 10.0),
+                (double)(CpuUsage[3] / 10.0));
+
+        WriteStringToLeds(Handle, String);
+        MillisecondSleep(UpdateInterval);
+    }
+
+    return;
+}
+
+void
+ShowCpuMemoryUsage (
+    usb_dev_handle *Handle,
+    int UpdateInterval
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enters a loop writing out the CPU and memory usage onto the
+    LEDs.
+
+Arguments:
+
+    Handle - Supplies the opened device handle.
+
+    UpdateInterval - Supplies the interval, in milliseconds, between updates
+        to the LED display.
+
+Return Value:
+
+    None. This function does not return, it enters an infinite loop until the
+    application is killed unless there is a failure.
+
+--*/
+
+{
+
+    int CpuUsage;
+    int MemoryUsage;
+    int Result;
+    char String[40];
+
+    while (TRUE) {
+        Result = GetProcessorAndMemoryUsage(&CpuUsage, &MemoryUsage);
+        if (Result == 0) {
+            printf("Error getting CPU usage.\n");
+            return;
+        }
+
+        sprintf(String,
+                "%5.1f%5.1f",
+                (double)(CpuUsage / 10.0),
+                (double)(MemoryUsage / 10.0));
+
+        WriteStringToLeds(Handle, String);
+        MillisecondSleep(UpdateInterval);
+    }
+
+    return;
+}
+
+void
+ShowNetworkUsage (
+    usb_dev_handle *Handle,
+    int UpdateInterval
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enters a loop writing out the networking upload and download
+    speed to the LEDs.
+
+Arguments:
+
+    Handle - Supplies the opened device handle.
+
+    UpdateInterval - Supplies the interval, in milliseconds, between updates
+        to the LED display.
+
+Return Value:
+
+    None. This function does not return, it enters an infinite loop until the
+    application is killed unless there is a failure.
+
+--*/
+
+{
+
+    int DownloadSpeed;
+    int Result;
+    char String[40];
+    int UploadSpeed;
+
+    while (TRUE) {
+        Result = GetNetworkUsage(&DownloadSpeed, &UploadSpeed);
+        if (Result == 0) {
+            printf("Error getting network usage.\n");
+            return;
+        }
+
+        //
+        // Print out kilobytes per second without a decimal point if the rate
+        // is less than 10MB/s. Otherwise, print out the rate in megabytes per
+        // second with a decimal point.
+        //
+
+        if (DownloadSpeed < 1000) {
+            if (UploadSpeed < 1000) {
+                sprintf(String, "%4d%4d", UploadSpeed, DownloadSpeed);
+
+            } else {
+                sprintf(String,
+                        "%5.1f%4d",
+                        (double)(UploadSpeed >> 10),
+                        DownloadSpeed);
+            }
+
+        } else {
+            if (UploadSpeed < 1000) {
+                sprintf(String,
+                        "%4d%5.1f",
+                        UploadSpeed,
+                        (double)(DownloadSpeed >> 10));
+
+            } else {
+                sprintf(String,
+                        "%5.1f%5.1f",
+                        (double)(UploadSpeed >> 10),
+                        (double)(DownloadSpeed >> 10));
+            }
+        }
+
+        WriteStringToLeds(Handle, String);
+        MillisecondSleep(UpdateInterval);
+    }
+
+    return;
+}
+
+void
+ShowCurrentDateAndTime (
+    usb_dev_handle *Handle,
+    int MilitaryTime,
+    int UpdateInterval
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enters a loop writing out the current date and time
+    to the LEDs.
+
+Arguments:
+
+    Handle - Supplies the opened device handle.
+
+    MilitaryTime - Supplies whether or not the time should be displayed in
+        military time.
+
+    UpdateInterval - Supplies the interval, in milliseconds, between updates
+        to the LED display.
+
+Return Value:
+
+    None. This function does not return, it enters an infinite loop until the
+    application is killed unless there is a failure.
+
+--*/
+
+{
+
+    int Day;
+    int Hour;
+    int Milliseconds;
+    int Minute;
+    int Month;
+    int Second;
+    int Year;
+    int Result;
+    char String[40];
+
+    while (TRUE) {
+        Result = GetCurrentDateAndTime(&Year,
+                                       &Month,
+                                       &Day,
+                                       &Hour,
+                                       &Minute,
+                                       &Second,
+                                       &Milliseconds);
+
+        if (Result == 0) {
+            printf("Error getting current time.\n");
+            return;
+        }
+
+        if (MilitaryTime != 0) {
+            if (Milliseconds < 500) {
+                sprintf(String,
+                        "%4d%4d%02d. %02d. %02d",
+                        Month,
+                        Day,
+                        Hour,
+                        Minute,
+                        Second);
+
+            } else {
+                sprintf(String,
+                        "%4d%4d%02d %02d %02d",
+                        Month,
+                        Day,
+                        Hour,
+                        Minute,
+                        Second);
+            }
+
+        } else {
+            if (Hour >= 12) {
+                Hour -= 12;
+            }
+
+            if (Hour == 0) {
+                Hour = 12;
+            }
+
+            if (Milliseconds < 500) {
+                sprintf(String,
+                        "%4d%4d%2d. %02d. %02d",
+                        Month,
+                        Day,
+                        Hour,
+                        Minute,
+                        Second);
+
+            } else {
+                sprintf(String,
+                        "%4d%4d%2d %02d %02d",
+                        Month,
+                        Day,
+                        Hour,
+                        Minute,
+                        Second);
+            }
+        }
+
+        WriteStringToLeds(Handle, String);
+        MillisecondSleep(UpdateInterval);
+    }
+
+    return;
+}
+

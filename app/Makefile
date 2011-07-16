@@ -26,7 +26,8 @@ BINARY := usbled
 
 TARGETLIBS :=  $(CURDIR)\libusb.a
 
-OBJS := usbled.o
+OBJS := usbled.o \
+        winsup.o
 
 #
 # Define the object and image root.
@@ -83,7 +84,7 @@ all: $(OBJROOT) $(BINROOT) $(BINARY)
 
 $(BINARY): $(OBJS) $(TARGETLIBS)
 	@echo Linking - $@
-	@cd $(OBJROOT) && $(CC) -o $@ $^
+	@cd $(OBJROOT) && $(CC) -o $@ $^ -liphlpapi
 	@echo Binplacing - $(OBJROOT)\$(BINARY)
 	@xcopy /Y /I /Q $(OBJROOT)\$(BINARY) $(BINROOT)\ > nul
 
