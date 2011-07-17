@@ -252,7 +252,7 @@ Return Value:
     // Initialize the performance information.
     //
 
-    GetProcessorUsage(NULL, 0);
+    GetProcessorUsage(NULL, 0, 0);
     Result = 1;
 
 InitializeOsDependentSupportEnd:
@@ -309,7 +309,8 @@ Return Value:
 int
 GetProcessorUsage (
     int *UsageBuffer,
-    int UsageBufferSize
+    int UsageBufferSize,
+    int CpuOffset
     )
 
 /*++
@@ -331,9 +332,13 @@ Arguments:
         routine will fill the buffer with data until it either runs out of
         CPUs or runs out of buffer space.
 
+    CpuOffset - Supplies the zero-based processor index to start reporting from.
+
 Return Value:
 
-    Returns the number of CPUs in the system.
+    Returns the number of CPUs filled into the structure. If a NULL or
+    zero-sized buffer is returned, returns the total number of CPUs in the
+    system.
 
     0 on failure.
 
@@ -388,8 +393,11 @@ Return Value:
 
     if ((UsageBuffer != NULL) && (UsageBufferSize != 0)) {
         MaxBufferIndex = UsageBufferSize / sizeof(int);
-        for (Processor = 0; Processor < NumberOfProcessors; Processor += 1) {
-            if (Processor >= MaxBufferIndex) {
+        for (Processor = CpuOffset;
+             Processor < NumberOfProcessors;
+             Processor += 1) {
+
+            if (Processor - CpuOffset >= MaxBufferIndex) {
                 break;
             }
 
@@ -410,9 +418,14 @@ Return Value:
                         PerformanceInformation[Processor].IdleTime.QuadPart -
                         LastIdleTime[Processor];
 
-            UsageBuffer[Processor] =
+            UsageBuffer[Processor - CpuOffset] =
                         (int)(1000 - (IdleDifference * 1000 / TimeDifference));
         }
+
+        Result = Processor - CpuOffset;
+
+    } else {
+        Result = NumberOfProcessors;
     }
 
     //
@@ -427,8 +440,6 @@ Return Value:
                         PerformanceInformation[Processor].UserTime.QuadPart +
                         PerformanceInformation[Processor].KernelTime.QuadPart;
     }
-
-    Result = NumberOfProcessors;
 
 GetProcessorUsageEnd:
     return Result;

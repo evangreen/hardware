@@ -359,12 +359,30 @@ Return Value:
         //
 
         PORTB |= SHIFT_REGISTER_CS;
+
+        //
+        // The USB LED and USB LED Mini differ here in that digits 1-4 and 5-8
+        // are reversed.
+        //
+
+#ifdef USBLED_MINI
+
         if (Column == 5) {
             PORTB |= SELECT_DIGIT0;
 
         } else {
             PORTD |= 1 << ((4 - Column) & 0x7);
         }
+
+#else
+
+        if (Column == 1) {
+            PORTB |= SELECT_DIGIT0;
+
+        } else {
+            PORTD |= 1 << ((8 - Column) & 0x7);
+        }
+#endif
 
         //
         // Write out the next bytes.
