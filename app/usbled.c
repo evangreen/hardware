@@ -543,7 +543,7 @@ Return Value:
             //
 
             if (DevicesChanged == 0) {
-                MillisecondSleep(10);
+                MillisecondSleep(250);
                 continue;
             }
 
