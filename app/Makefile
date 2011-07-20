@@ -24,31 +24,41 @@
 
 BINARY := usbled
 
-TARGETLIBS :=  $(CURDIR)\libusb.a
+OBJS := usbled.o
 
-OBJS := usbled.o \
-        winsup.o
+ifeq (Windows_NT, $(OS))
+OBJS += winsup.o
+TARGETLIBS :=  $(CURDIR)\libusb.a
+else
+OBJS += linuxsup.o
+endif
 
 #
 # Define the object and image root.
 #
 
-ifeq (x86, $(ARCH))
+ifeq (Windows_NT, $(OS))
 BINROOT = $(subst /,\,$(CURDIR))\$(ARCH)bin
 OBJROOT = $(subst /,\,$(CURDIR))\$(ARCH)obj
+else
+BINROOT = $(CURDIR)/x86bin
+OBJROOT = $(CURDIR)/x86obj
 endif
 
 #
 # Executable variables
 #
 
-ifeq (x86, $(ARCH))
 CC = gcc
 LD = ld
 RCC = windres
 AR = ar rcs
 AS = as
+
+ifeq (Windows_NT, $(OS))
 BINARY := $(BINARY).exe
+else
+BINARY := $(BINARY)
 endif
 
 #
@@ -84,20 +94,40 @@ all: $(OBJROOT) $(BINROOT) $(BINARY)
 
 $(BINARY): $(OBJS) $(TARGETLIBS)
 	@echo Linking - $@
+ifeq (Windows_NT, $(OS))
 	@cd $(OBJROOT) && $(CC) -o $@ $^ -liphlpapi
 	@echo Binplacing - $(OBJROOT)\$(BINARY)
 	@xcopy /Y /I /Q $(OBJROOT)\$(BINARY) $(BINROOT)\ > nul
+else
+	@cd $(OBJROOT) && $(CC) -o $@ $^ -lusb
+	@echo Binplacing - $(OBJROOT)/$(BINARY)
+	@cp $(OBJROOT)/$(BINARY) $(BINROOT)/
+endif
+
 
 $(OBJROOT):
+ifeq (Windows_NT, $(OS))
 	-@mkdir $(OBJROOT) > nul
 	-@mkdir $(OBJROOT)\x86 > nul
+else
+	-@mkdir $(OBJROOT) > /dev/null
+endif
 
 $(BINROOT):
+ifeq (Windows_NT, $(OS))
 	-@mkdir $(BINROOT) > nul
+else
+	-@mkdir $(BINROOT) > /dev/null
+endif
 
 wipe:
+ifeq (Windows_NT, $(OS))
 	-rmdir /s /q $(OBJROOT)
 	-rmdir /s /q $(BINROOT)
+else
+	-rm -rf $(OBJROOT)
+	-rm -rf $(BINROOT)
+endif
 
 #
 # Generic target specifying how to compile a file.

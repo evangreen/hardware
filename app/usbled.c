@@ -28,18 +28,21 @@ Environment:
 #ifdef __WIN32__
 
 #include <windows.h>
+#include "usbwin.h"
 
 #else
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <usb.h>
 
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
-#include "usb.h"
+#include <errno.h>
 #include "ossup.h"
 
 //
@@ -138,6 +141,18 @@ Environment:
     "    the device under \"LibUSB-Win32 Devices\". For more detailed \n" \
     "    instructions and to download the latest drivers, head to \n"\
     "    www.oneringroad.com.\n\n"
+
+//
+// Define basic constants.
+//
+
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
 
 //
 // Define the vendor and device ID of the USB LED controller.
@@ -302,10 +317,10 @@ OPTION_LIST Options;
 // ------------------------------------------------------------------ Functions
 //
 
-INT
+int
 main (
-    INT argc,
-    CHAR **argv
+    int argc,
+    char **argv
     )
 
 /*++
@@ -474,7 +489,7 @@ Return Value:
             argv += 1;
 
         } else if ((strcmp(Argument, "h") == 0) ||
-                   (stricmp(Argument, "-help") == 0)) {
+                   (strcmp(Argument, "-help") == 0)) {
 
             printf(USAGE_STRING);
             return 1;
@@ -1371,7 +1386,7 @@ Return Value:
     int CpuCount;
     int CpuIndex;
     int CpuUsage[USBLED_MAX_ROWS * 2];
-    char SprintResult[5];
+    char SprintResult[6];
 
     if (StringSize < 4) {
         return 0;
