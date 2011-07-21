@@ -1249,7 +1249,7 @@ Return Value:
         printf("Error writing command, wrote %d of %d bytes.\n"
                "Status: %s\n",
                Result,
-               sizeof(Result),
+               (int)sizeof(Result),
                strerror(-Result));
     }
 

@@ -4,11 +4,11 @@ Copyright (c) 2011 Evan Green
 
 Module Name:
 
-    linux.c
+    linuxsup.c
 
 Abstract:
 
-    This module implements Windows NT operating system specific support for the
+    This module implements Linux operating system specific support for the
     USB LED app.
 
 Author:
@@ -31,16 +31,6 @@ Environment:
 #include <errno.h>
 #include <time.h>
 #include <sys/time.h>
-
-#if 0
-
-#include <sys/sysctl.h>
-#include <netinet/in.h>
-#include <net/if.h>
-#include <net/route.h>
-
-#endif
-
 #include "ossup.h"
 
 //
@@ -747,106 +737,6 @@ Return Value:
     *UploadSpeed = (int)((OutDifference >> 10) * 1000000 / TimeDifference);
     return 1;
 }
-
-#if 0
-
-int
-GetNetworkUsage (
-    int *DownloadSpeed,
-    int *UploadSpeed
-    )
-
-/*++
-
-Routine Description:
-
-    This routine queries the current network utilization.
-
-Arguments:
-
-    DownloadSpeed - Supplies a pointer where the download speed in kilobytes
-        per second will be returned.
-
-    UploadSpeed - Supplies a pointer where the upload speed in kilobytes per
-        second will be returned.
-
-Return Value:
-
-    Non-zero on success.
-
-    0 on failure.
-
---*/
-
-{
-
-    char *BufferEnd;
-    int Length;
-    struct if_msghdr *MessageHeader;
-    struct if_msghdr2 *MessageHeader2;
-    char *NetworkControlBuffer;
-    int Request[6];
-    ULONGLONG TotalBytesIn;
-    ULONGLONG TotalBytesOut;
-
-    TotalBytesIn = 0;
-    TotalBytesOut = 0;
-    Request[0] = CTL_NET;
-    Request[1] = PF_ROUTE;
-    Request[2] = 0;
-    Request[3] = 0;
-    Request[4] = NET_RT_IFLIST2;
-    Request[5] = 0;
-
-    //
-    // Perform the sysctl once to get the length of the result.
-    //
-
-    if (sysctl(Request, 6, NULL, &Length, NULL, 0) < 0) {
-        printf("Error: sysctl errored out: %s\n", strerror(errno));
-        return 0;
-    }
-
-    //
-    // Allocate the buffer space.
-    //
-
-    NetworkControlBuffer = malloc(Length);
-    if (NetworkControlBuffer == NULL) {
-        printf("Error: Unable to allocate %d byte for network control "
-               "buffer.\n",
-               Length);
-
-        return 0;
-    }
-
-    //
-    // Perform the sysctl to get networking statistics from the kernel.
-    //
-
-    if (sysctl(Request, 6, NetworkControlBuffer, &Length, NULL, 0) < 0) {
-        printf("Error: sysctl errored out: %s\n", strerror(errno));
-        return 0;
-    }
-
-    BufferEnd = NetworkControlBuffer + Length;
-    MessageHeader = NetworkControlBuffer;
-    while (MessageHeader + sizeof(struct if_msghdr) <= BufferEnd) {
-        if (MessageHeader->ifm_type == RTM_IFINFO2) {
-            MessageHeader2 = (struct if_msghdr2 *)MessageHeader;
-            TotalBytesIn += MessageHeader2->ifm_data.ifi_ibytes;
-            TotalBytesOut += MessageHeader2->ifm_data.ifi_obytes;
-        }
-
-        MessageHeader = (struct if_msghdr *)((char *)MessageHeader +
-                                             MessageHeader->ifm_msglen);
-    }
-
-    printf("Downloaded: %llu, Uploaded %llu\n", TotalBytesIn, TotalBytesOut);
-    return 1;
-}
-
-#endif
 
 int
 GetCurrentDateAndTime (

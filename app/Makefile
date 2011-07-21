@@ -26,11 +26,25 @@ BINARY := usbled
 
 OBJS := usbled.o
 
+#
+# Set up the OS variable.
+#
+
+ifneq (Windows_NT, $(OS))
+ifeq (Darwin, $(shell uname))
+OS = mac
+endif
+endif
+
 ifeq (Windows_NT, $(OS))
 OBJS += winsup.o
 TARGETLIBS :=  $(CURDIR)\libusb.a
 else
+ifeq (mac, $(OS))
+OBJS += macsup.o
+else
 OBJS += linuxsup.o
+endif
 endif
 
 #
