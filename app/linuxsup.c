@@ -29,6 +29,18 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
+
+#if 0
+
+#include <sys/sysctl.h>
+#include <netinet/in.h>
+#include <net/if.h>
+#include <net/route.h>
+
+#endif
+
 #include "ossup.h"
 
 //
@@ -40,6 +52,15 @@ Environment:
 //
 
 #define LINE_MAX 1024
+
+//
+// Define the start of the network statistics line containing the total bytes
+// moved.
+//
+
+#define IP_EXT_LINE "IpExt: "
+#define IN_OCTETS_TITLE "InOctets"
+#define OUT_OCTETS_TITLE "OutOctets"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -60,10 +81,12 @@ DestroyOsDependentSupport (
 //
 
 //
-// Store a pointer to the /proc/stat file.
+// Store a pointer to the various /proc files.
 //
 
 FILE *StatFile = NULL;
+FILE *MemoryInfoFile = NULL;
+FILE *NetstatFile = NULL;
 
 //
 // Store the number of processors in the system.
@@ -85,6 +108,14 @@ ULONGLONG *LastTotalTime;
 
 ULONGLONG LastSummaryIdleTime;
 ULONGLONG LastSummaryTotalTime;
+
+//
+// Store the indices within the stats file where total bytes sent/received
+// are stored.
+//
+
+int InBytesIndex;
+int OutBytesIndex;
 
 //
 // Store the last networking snapshot.
@@ -146,7 +177,30 @@ Return Value:
         printf("Error: Failed to open /proc/stat.\nError: %s\n",
                strerror(errno));
 
-        while (1);
+        goto InitializeOsDependentSupportEnd;
+    }
+
+    //
+    // Attempt to open the meminfo file.
+    //
+
+    MemoryInfoFile = fopen("/proc/meminfo", "r");
+    if (MemoryInfoFile == NULL) {
+        printf("Error: Failed to open /proc/meminfo.\nError: %s\n",
+               strerror(errno));
+
+        goto InitializeOsDependentSupportEnd;
+    }
+
+    //
+    // Attempt to open the netstat file.
+    //
+
+    NetstatFile = fopen("/proc/net/netstat", "r");
+    if (NetstatFile == NULL) {
+        printf("Error: Failed to open /proc/netstat.\nError: %s\n",
+               strerror(errno));
+
         goto InitializeOsDependentSupportEnd;
     }
 
@@ -200,6 +254,16 @@ Return Value:
     if (StatFile != NULL) {
         fclose(StatFile);
         StatFile = NULL;
+    }
+
+    if (MemoryInfoFile != NULL) {
+        fclose(MemoryInfoFile);
+        MemoryInfoFile = NULL;
+    }
+
+    if (NetstatFile != NULL) {
+        fclose(NetstatFile);
+        NetstatFile = NULL;
     }
 
     NumberOfProcessors = 0;
@@ -332,14 +396,6 @@ Return Value:
         //
 
         TotalTime = UserTime + KernelTime + NiceTime + IdleTime;
-        printf("Cpu %d: User %llu Kernel %llu nice %llu idle %llu...Total %llu\n",
-               CpuIndex,
-               (unsigned long long)UserTime,
-               (unsigned long long)KernelTime,
-               (unsigned long long)NiceTime,
-               (unsigned long long)IdleTime,
-               (unsigned long long)TotalTime);
-
         if ((LastIdleTime != NULL) && (LastTotalTime != NULL)) {
             IdleDifference = IdleTime - LastIdleTime[CpuIndex];
             TotalDifference = TotalTime - LastTotalTime[CpuIndex];
@@ -350,7 +406,6 @@ Return Value:
                 UsageBuffer[CpuIndex - CpuOffset] =
                         (int)(1000 - (IdleDifference * 1000 / TotalDifference));
 
-                printf("CPU%d: %d\n", CpuIndex, UsageBuffer[CpuIndex - CpuOffset]);
                 Results += 1;
             }
 
@@ -400,7 +455,118 @@ Return Value:
 
 {
 
-    return 0;
+    ULONGLONG FreeMemory;
+    ULONGLONG KernelTime;
+    ULONGLONG IdleTime;
+    ULONGLONG IdleTimeDifference;
+    ULONGLONG NiceTime;
+    int Result;
+    ULONGLONG TotalMemory;
+    ULONGLONG TotalTime;
+    ULONGLONG TotalTimeDifference;
+    ULONGLONG UserTime;
+
+    //
+    // Potentially perform one-time initialization.
+    //
+
+    if ((MemoryInfoFile == NULL) || (StatFile == NULL)) {
+        Result = InitializeOsDependentSupport();
+        if (Result == 0) {
+            printf("Error: Unable to initialize linux support.\n");
+            return 0;
+        }
+    }
+
+    //
+    // Start the files at the beginning.
+    //
+
+    rewind(StatFile);
+    fflush(StatFile);
+    rewind(MemoryInfoFile);
+    fflush(MemoryInfoFile);
+
+    //
+    // Get the first line.
+    //
+
+    if (fgets(Line, LINE_MAX, StatFile) == NULL) {
+        printf("Error: Unable to read first line of /proc/stat.\n");
+        return 0;
+    }
+
+    if ((Line[0] != 'c') || (Line[1] != 'p') || (Line[2] != 'u') |
+        (Line[3] != ' ')) {
+
+        printf("Error: Expected beginning of /proc/stat to be cpu info.\n");
+        return 0;
+    }
+
+    //
+    // Get the needed integers.
+    //
+
+    Result = sscanf(Line,
+                    "%*s %llu %llu %llu %llu",
+                    &UserTime,
+                    &KernelTime,
+                    &NiceTime,
+                    &IdleTime);
+
+    if (Result < 4) {
+        printf("Error: Only read %d values from scanning /proc/stat.\n",
+               Result);
+
+        return 0;
+    }
+
+    //
+    // Compute CPU usage percentage (times 10).
+    //
+
+    TotalTime = UserTime + KernelTime + NiceTime + IdleTime;
+    TotalTimeDifference = TotalTime - LastSummaryTotalTime;
+    IdleTimeDifference = IdleTime - LastSummaryIdleTime;
+    LastSummaryTotalTime = TotalTime;
+    LastSummaryIdleTime = IdleTime;
+    *ProcessorUsage =
+                (int)(1000 - (IdleTimeDifference * 1000 / TotalTimeDifference));
+
+    //
+    // Get the first two lines of the meminfo file.
+    //
+
+    if (fgets(Line, LINE_MAX, MemoryInfoFile) == NULL) {
+        printf("Error: Unable to read first line of /proc/meminfo.\n");
+        return 0;
+    }
+
+    Result = sscanf(Line, "MemTotal: %llu", &TotalMemory);
+    if (Result < 1) {
+        printf("Error: Only read %d values from scanning MemTotal of "
+               "/proc/meminfo.\n",
+               Result);
+
+        return 0;
+    }
+
+    if (fgets(Line, LINE_MAX, MemoryInfoFile) == NULL) {
+        printf("Error: Unable to read second line of /proc/meminfo.\n");
+        return 0;
+    }
+
+    Result = sscanf(Line, "MemFree: %llu", &FreeMemory);
+    if (Result < 1) {
+        printf("Error: Only read %d values from scanning MemFree of "
+               "/proc/meminfo.\n",
+               Result);
+
+        return 0;
+    }
+
+    *MemoryUsage = (int)(1000 - (FreeMemory * 1000 / TotalMemory));
+    return 1;
 }
 
 int
@@ -432,8 +598,255 @@ Return Value:
 --*/
 
 {
-    return 0;
+
+    ULONGLONG BytesReceived;
+    ULONGLONG BytesSent;
+    ULONGLONG InDifference;
+    ULONGLONG OutDifference;
+    int Result;
+    ULONGLONG SystemTime;
+    ULONGLONG TimeDifference;
+    struct timeval TimeOfDay;
+    char *Title;
+    int TitleIndex;
+
+    if (NetstatFile == NULL) {
+        Result = InitializeOsDependentSupport();
+        if (Result == 0) {
+            printf("Error: Unable to initialize linux support.\n");
+            return 0;
+        }
+    }
+
+    rewind(NetstatFile);
+    fflush(NetstatFile);
+
+    //
+    // Scan lines until the Ip statistics are found.
+    //
+
+    while (1) {
+        if (fgets(Line, LINE_MAX, NetstatFile) == NULL) {
+            printf("Error: Unable to read line of /proc/net/netstat.\n");
+            return 0;
+        }
+
+        if (strncmp(Line, IP_EXT_LINE, strlen(IP_EXT_LINE)) == 0) {
+            break;
+        }
+    }
+
+    //
+    // Search for the title of the inbound and outbound octets.
+    //
+
+    if ((InBytesIndex == 0) || (OutBytesIndex == 0)) {
+        if (strtok(Line, " ") == NULL) {
+            printf("Error: Unable to tokenize titles.\n");
+            return 0;
+        }
+
+        TitleIndex = 0;
+        while ((InBytesIndex == 0) || (OutBytesIndex == 0)) {
+            Title = strtok(NULL, " ");
+            if (Title == NULL) {
+                printf("Error: Unable to get titles.\n");
+                return 0;
+            }
+
+            if (InBytesIndex == 0) {
+                if (strncmp(Title,
+                            IN_OCTETS_TITLE,
+                            strlen(IN_OCTETS_TITLE)) == 0) {
+
+                    InBytesIndex = TitleIndex;
+                }
+            }
+
+            if (OutBytesIndex == 0) {
+                if (strncmp(Title,
+                            OUT_OCTETS_TITLE,
+                            strlen(OUT_OCTETS_TITLE)) == 0) {
+
+                    OutBytesIndex = TitleIndex;
+                }
+            }
+
+            TitleIndex += 1;
+        }
+    }
+
+    //
+    // Now scan the line that has the data.
+    //
+
+    if (fgets(Line, LINE_MAX, NetstatFile) == NULL) {
+        printf("Error: Unable to read data line of /proc/net/netstat.\n");
+        return 0;
+    }
+
+    //
+    // Tokenize to get the data.
+    //
+
+    if (strtok(Line, " ") == NULL) {
+        printf("Error: Unable to tokenize titles.\n");
+        return 0;
+    }
+
+    TitleIndex = 0;
+    while ((TitleIndex <= InBytesIndex) || (TitleIndex <= OutBytesIndex)) {
+        Title = strtok(NULL, " ");
+        if (Title == NULL) {
+            printf("Error: Unable to get titles.\n");
+            return 0;
+        }
+
+        if (TitleIndex == InBytesIndex) {
+            Result = sscanf(Title, "%llu", &BytesReceived);
+            if (Result != 1) {
+                printf("Error: Got %d result for scanning bytes received.\n",
+                       Result);
+
+                return 0;
+            }
+        }
+
+        if (TitleIndex == OutBytesIndex) {
+            Result = sscanf(Title, "%llu", &BytesSent);
+            if (Result != 1) {
+                printf("Error: Got %d result for scanning bytes received.\n",
+                       Result);
+
+                return 0;
+            }
+        }
+
+        TitleIndex += 1;
+    }
+
+    //
+    // Get the current time of day.
+    //
+
+    gettimeofday(&TimeOfDay, NULL);
+    SystemTime = TimeOfDay.tv_sec * 1000000 + TimeOfDay.tv_usec;
+    TimeDifference = SystemTime - LastNetworkSystemTime;
+    InDifference = BytesReceived - LastNetworkBytesReceived;
+    OutDifference = BytesSent - LastNetworkBytesSent;
+    LastNetworkSystemTime = SystemTime;
+    LastNetworkBytesSent = BytesSent;
+    LastNetworkBytesReceived = BytesReceived;
+
+    //
+    // System time is in microseconds. Shift to get from bytes to
+    // kilobytes, and multiply by 10^6 to get to seconds.
+    //
+
+    *DownloadSpeed = (int)((InDifference >> 10) * 1000000 / TimeDifference);
+    *UploadSpeed = (int)((OutDifference >> 10) * 1000000 / TimeDifference);
+    return 1;
 }
+
+#if 0
+
+int
+GetNetworkUsage (
+    int *DownloadSpeed,
+    int *UploadSpeed
+    )
+
+/*++
+
+Routine Description:
+
+    This routine queries the current network utilization.
+
+Arguments:
+
+    DownloadSpeed - Supplies a pointer where the download speed in kilobytes
+        per second will be returned.
+
+    UploadSpeed - Supplies a pointer where the upload speed in kilobytes per
+        second will be returned.
+
+Return Value:
+
+    Non-zero on success.
+
+    0 on failure.
+
+--*/
+
+{
+
+    char *BufferEnd;
+    int Length;
+    struct if_msghdr *MessageHeader;
+    struct if_msghdr2 *MessageHeader2;
+    char *NetworkControlBuffer;
+    int Request[6];
+    ULONGLONG TotalBytesIn;
+    ULONGLONG TotalBytesOut;
+
+    TotalBytesIn = 0;
+    TotalBytesOut = 0;
+    Request[0] = CTL_NET;
+    Request[1] = PF_ROUTE;
+    Request[2] = 0;
+    Request[3] = 0;
+    Request[4] = NET_RT_IFLIST2;
+    Request[5] = 0;
+
+    //
+    // Perform the sysctl once to get the length of the result.
+    //
+
+    if (sysctl(Request, 6, NULL, &Length, NULL, 0) < 0) {
+        printf("Error: sysctl errored out: %s\n", strerror(errno));
+        return 0;
+    }
+
+    //
+    // Allocate the buffer space.
+    //
+
+    NetworkControlBuffer = malloc(Length);
+    if (NetworkControlBuffer == NULL) {
+        printf("Error: Unable to allocate %d byte for network control "
+               "buffer.\n",
+               Length);
+
+        return 0;
+    }
+
+    //
+    // Perform the sysctl to get networking statistics from the kernel.
+    //
+
+    if (sysctl(Request, 6, NetworkControlBuffer, &Length, NULL, 0) < 0) {
+        printf("Error: sysctl errored out: %s\n", strerror(errno));
+        return 0;
+    }
+
+    BufferEnd = NetworkControlBuffer + Length;
+    MessageHeader = NetworkControlBuffer;
+    while (MessageHeader + sizeof(struct if_msghdr) <= BufferEnd) {
+        if (MessageHeader->ifm_type == RTM_IFINFO2) {
+            MessageHeader2 = (struct if_msghdr2 *)MessageHeader;
+            TotalBytesIn += MessageHeader2->ifm_data.ifi_ibytes;
+            TotalBytesOut += MessageHeader2->ifm_data.ifi_obytes;
+        }
+
+        MessageHeader = (struct if_msghdr *)((char *)MessageHeader +
+                                             MessageHeader->ifm_msglen);
+    }
+
+    printf("Downloaded: %llu, Uploaded %llu\n", TotalBytesIn, TotalBytesOut);
+    return 1;
+}
+
+#endif
 
 int
 GetCurrentDateAndTime (
@@ -486,7 +899,19 @@ Return Value:
 
 {
 
-    return 0;
+    struct timeval SystemTime;
+    struct tm TimeComponents;
+
+    gettimeofday(&SystemTime, NULL);
+    localtime_r(&(SystemTime.tv_sec), &TimeComponents);
+    *Year = TimeComponents.tm_year;
+    *Month = TimeComponents.tm_mon + 1;
+    *Day = TimeComponents.tm_mday;
+    *Hour = TimeComponents.tm_hour;
+    *Minute = TimeComponents.tm_min;
+    *Second = TimeComponents.tm_sec;
+    *Millisecond = SystemTime.tv_usec / 1000;
+    return 1;
 }
 
 //
