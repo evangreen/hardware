@@ -4,16 +4,16 @@
 #
 #   Module Name:
 #
-#       USB LED Project Makefile
+#       USB Relay Project Makefile
 #
 #   Abstract:
 #
-#       This file implements the Makefile that builds the USB LED firmware for
+#       This file implements the Makefile that builds the USB Relay firmware for
 #       AVR.
 #
 #   Author:
 #
-#       Evan Green 6-Jul-2011
+#       Evan Green 11-Sep-2011
 #
 #   Environment:
 #
@@ -21,12 +21,11 @@
 #
 ################################################################################
 
-BINARY := usbledmini
+BINARY := usbrelay
 
-OBJS1 := usbled.o        \
+OBJS1 := usbrelay.o      \
          crc.o           \
          int.o           \
-         spi.o           \
          usb.o           \
 
 MCU = attiny2313

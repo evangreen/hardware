@@ -11,8 +11,8 @@
 // I/O port. The following macros define the port letter and the input
 // bit numbers:
 #define    USBTINY_PORT            B
-#define    USBTINY_DPLUS           4
-#define    USBTINY_DMINUS          3
+#define    USBTINY_DPLUS           3
+#define    USBTINY_DMINUS          2
 
 // The D+ signal should be connected to an interrupt input to trigger an
 // interrupt at the start of a packet. When you use the same pin for the

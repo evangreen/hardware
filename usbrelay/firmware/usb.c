@@ -30,7 +30,7 @@
 #include <avr/interrupt.h>
 #include "def.h"
 #include "usb.h"
-#include "usbled.h"
+#include "usbrelay.h"
 
 #define    LE(word)            (word) & 0xff, (word) >> 8
 
@@ -225,7 +225,7 @@ static    void    usb_receive ( byte_t* data, byte_t rx_len )
             else if    ( data[1] == 5 )    // SET_ADDRESS
             {
                 usb_new_address = data[2];
-                DigitState[0] = USBLED_PERIOD;
+                SetRelayState((RelayState & (~RELAY_STATUS2)) | RELAY_STATUS1);
 
 #ifdef    USBTINY_USB_OK_LED
                 SET(USBTINY_USB_OK_LED);// LED on
@@ -415,7 +415,7 @@ extern    void    usb_poll ( void )
     }
     if    ( i == 0 )
     {    // SE0 for more than 2.5uS is a reset
-        DigitState[1] = USBLED_DASH;
+        SetRelayState(RelayState & (~(RELAY_STATUS1 | RELAY_STATUS2)));
         usb_new_address = 0;
         usb_address = 0;
 #ifdef    USBTINY_USB_OK_LED
