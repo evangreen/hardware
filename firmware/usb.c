@@ -415,6 +415,7 @@ extern    void    usb_poll ( void )
     }
     if    ( i == 0 )
     {    // SE0 for more than 2.5uS is a reset
+        DigitState[1] = USBLED_DASH;
         usb_new_address = 0;
         usb_address = 0;
 #ifdef    USBTINY_USB_OK_LED

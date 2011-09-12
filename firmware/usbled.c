@@ -340,6 +340,7 @@ Return Value:
     //
 
     PORTB |= USB_PULLUP_PIN;
+    DigitState[0] = USBLED_DASH;
 
     //
     // Enter the main program loop.

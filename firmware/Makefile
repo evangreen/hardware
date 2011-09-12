@@ -23,14 +23,14 @@
 
 BINARY := usbledmini
 
-OBJS1 := crc.o           \
+OBJS1 := usbled.o        \
+         crc.o           \
          int.o           \
          spi.o           \
          usb.o           \
-         usbled.o        \
 
 MCU = attiny2313
-PROGMCU = attiny4313
+PROGMCU = attiny2313
 
 #
 # Define the object and image root.
@@ -103,7 +103,7 @@ ASOPTIONS = -mmcu=$(MCU) -Os -c -x assembler-with-cpp -D__ASSEMBLY__
 all: $(OBJROOT) $(BINROOT) $(BINARY)
 
 program: all
-	avrdude -c usbtiny -p$(PROGMCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xef:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
+	avrdude -c usbtiny -p$(PROGMCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
 
 #
 # The dependencies of the binary object depend on the architecture and type of
@@ -117,7 +117,7 @@ endif
 ifeq (avr, $(ARCH))
 ALLOBJS1 = $(OBJS1) $(AVR_OBJS1)
 $(BINARY): $(BINARY).elf
-	@cd $(OBJROOT) && $(OBJCOPY) -O binary -R .eeprom -R .fuse -R .lock -R .signature $^ $@
+	@cd $(OBJROOT) && $(OBJCOPY) -O ihex -R .eeprom -R .fuse -R .lock -R .signature $^ $@
 	@echo Binplacing - $(OBJROOT)/$(BINARY)
 	@cp -f $(OBJROOT)/$(BINARY) $(BINROOT)/
 
