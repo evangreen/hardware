@@ -31,6 +31,7 @@ Environment:
 
 #include <avr/pgmspace.h>
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include "usb.h"
 #include "usbrelay.h"
 
@@ -67,17 +68,17 @@ Environment:
 #define USBRELAY_SET_RELAYS 0
 
 //
-// This command turns the given mask of relays off.
-//
-
-#define USBRELAY_CLEAR_RELAYS 1
-
-//
 // This command turns on the given mask of relays, ORing it in with the current
 // value.
 //
 
-#define USBRELAY_ENABLE_RELAYS 2
+#define USBRELAY_ENABLE_RELAYS 1
+
+//
+// This command turns the given mask of relays off.
+//
+
+#define USBRELAY_CLEAR_RELAYS 2
 
 //
 // This command toggles the given mask of relays.
@@ -92,9 +93,44 @@ Environment:
 #define USBRELAY_GET_STATE 4
 
 //
+// This command sets the new power on defaults of the relays.
+//
+
+#define USBRELAY_SET_DEFAULTS 5
+
+//
+// This command gets the current power on defaults.
+//
+
+#define USBRELAY_GET_DEFAULTS 6
+
+//
+// Define the address of the relay default storage.
+//
+
+#define USBRELAY_DEFAULTS_EEPROM_ADDRESS 0
+
+//
+// Define the mask of which of the relay state is affected by defaults
+// (the relays but not the status bits).
+//
+
+#define USBRELAY_DEFAULTS_MASK 0x1F
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+void
+WriteEepromByte (
+    unsigned char Address,
+    unsigned char Data
+    );
+
+unsigned char
+ReadEepromByte (
+    unsigned char Address
+    );
 
 //
 // -------------------------------------------------------------------- Globals
@@ -136,13 +172,16 @@ Return Value:
 {
 
     unsigned char NewState;
-    unsigned char Request;
     unsigned char ReturnCount;
 
-    NewState = RelayState;
     ReturnCount = 0;
-    Request = Data[1];
-    switch (Request) {
+
+    //
+    // Check and respond to the request field.
+    //
+
+    NewState = RelayState;
+    switch (Data[1]) {
     case USBRELAY_SET_RELAYS:
         NewState = Data[2];
         break;
@@ -160,9 +199,19 @@ Return Value:
         break;
 
     case USBRELAY_GET_STATE:
-        Data[0] = 0xA5;
-        Data[1] = RelayState;
-        ReturnCount = 2;
+        Data[0] = RelayState;
+        ReturnCount = 1;
+        break;
+
+    case USBRELAY_SET_DEFAULTS:
+        WriteEepromByte(USBRELAY_DEFAULTS_EEPROM_ADDRESS,
+                        Data[2] & USBRELAY_DEFAULTS_MASK);
+
+        break;
+
+    case USBRELAY_GET_DEFAULTS:
+        Data[0] = ReadEepromByte(USBRELAY_DEFAULTS_EEPROM_ADDRESS);
+        ReturnCount = 1;
         break;
 
     default:
@@ -177,7 +226,7 @@ Return Value:
         SetRelayState(NewState);
     }
 
-    return 0;
+    return ReturnCount;
 }
 
 extern
@@ -268,6 +317,8 @@ Return Value:
 
 {
 
+    unsigned char InitialState;
+
     //
     // Set up the I/O port initial values and data direction registers. Do not
     // drive the relay pins until being told to do so.
@@ -282,7 +333,8 @@ Return Value:
     // Set the initial relay state.
     //
 
-    SetRelayState(RELAY_STATUS2);
+    InitialState = ReadEepromByte(USBRELAY_DEFAULTS_EEPROM_ADDRESS);
+    SetRelayState(RELAY_STATUS2 | InitialState);
 
     //
     // Initialize the USB library.
@@ -362,6 +414,146 @@ Return Value:
     DDRD = DataDirection;
     RelayState = NewState;
     return;
+}
+
+void
+WriteEepromByte (
+    unsigned char Address,
+    unsigned char Data
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes to the EEPROM memory space, a non-volatile storage
+    array.
+
+Arguments:
+
+    Address - Supplies the EEPROM address to write to. Valid offsets start at
+        0.
+
+    Data - Supplies the byte to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Disable interrupts during this timed sequence.
+    //
+
+    cli();
+
+    //
+    // Wait for any previous operations to finish.
+    //
+
+    while (EECR & (1 << EEPE)) {
+        ;
+    }
+
+    //
+    // Set up the address and data registers.
+    //
+
+    EEAR = Address;
+    EEDR = Data;
+
+    //
+    // Write a logical one to EEMPE.
+    //
+
+    EECR |= (1 << EEMPE);
+
+    //
+    // Start the EEPROM write.
+    //
+
+    EECR |= (1 << EEPE);
+
+    //
+    // Re-enable interrupts and return.
+    //
+
+    sei();
+    return;
+}
+
+unsigned char
+ReadEepromByte (
+    unsigned char Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads from the EEPROM memory space, a non-volatile storage
+    array.
+
+Arguments:
+
+    Address - Supplies the EEPROM address to read from. Valid offsets start at
+        0.
+
+Return Value:
+
+    Returns the data at the given address.
+
+--*/
+
+{
+
+    unsigned char Value;
+
+    //
+    // Disable interrupts during this timed sequence.
+    //
+
+    cli();
+
+    //
+    // Wait for any previous operations to finish.
+    //
+
+    while (EECR & (1 << EEPE)) {
+        ;
+    }
+
+    //
+    // Set up the address register.
+    //
+
+    EEAR = Address;
+
+    //
+    // Start the EEPROM read.
+    //
+
+    EECR |= (1 << EERE);
+    Value = EEDR;
+
+    //
+    // Re-enable interrupts and return.
+    //
+
+    sei();
+
+    //
+    // If the value is all 1s, this is treated as an uninitialized value.
+    //
+
+    if (Value == 0xFF) {
+        Value = 0;
+    }
+
+    return Value;
 }
 
 //
