@@ -68,9 +68,8 @@ Environment:
     "    value into the relays and/or status LEDs. It can also enable, \n"     \
     "    disable and toggle any combination of relays. The usage is as\n"      \
     "    follows:\n\n"                                                         \
-    "usbrelay <value>\n"                                                       \
-    "usbrelay <command> <value>\n"                                             \
-    "usbrelay -n <command> <index>\n"                                          \
+    "usbrelay <options> <value>\n"                                             \
+    "usbrelay <options> <command> <value>\n"                                   \
     "usbrelay -i\n"                                                            \
     "    Value takes the form of a bitmask. To access relay 1, use a value\n"  \
     "    of 0x1. Relay 2 is 0x2, Relay 3 is 0x4, Relay 4 is 0x8, and Relay 5\n"\
@@ -82,6 +81,15 @@ Environment:
     "    The -n option tells the program to set the value of the relays to\n"  \
     "    the value provided by stdin.\n\n"                                     \
     "    The -g option prints the current state of the relays to stdout.\n\n"  \
+    "    The -l options lists the serial numbers of all connected devices."    \
+    "\n\n "                                                                    \
+    "    The -r option specifies the serial number of the device to interact " \
+    "    The -s option specifies to skip a given number of eligible devices\n" \
+    "        before interacting with one. This method can be used instead of\n"\
+    "        specifying a full serial number when interacting with multiple\n" \
+    "        devices. Example: usbrelay -s 1 0x7 programs the value 7 into\n"  \
+    "        the second USB Relay device that can be found.\n\n"               \
+    "with.\n\n"                                                                \
     "Commands:\n"                                                              \
     "    set - Set the state of all relays (and LEDs) to the given value.\n"   \
     "    on - Enable the given mask of relays, leaving the state of relays\n"  \
@@ -95,7 +103,7 @@ Environment:
     "    defaults - Sets the power on default state of the relays to the\n"    \
     "        given state.\n"                                                   \
     "    getdefaults - Prints the current power on default state of the\n"     \
-    "        relays to stdout."                                                \
+    "        relays to stdout.\n\n"                                            \
     "Examples:\n"                                                              \
     "    usbrelay -n on 3\n"                                                   \
     "        Turns on relay 3, leaving the state of other relays untouched.\n" \
@@ -121,8 +129,8 @@ Environment:
 // Define the vendor and device ID of the USB LED controller.
 //
 
-#define USBRELAY_VENDOR_ID 0x0F68
-#define USBRELAY_PRODUCT_ID 0x1986
+#define USBRELAY_VENDOR_ID 0x8619
+#define USBRELAY_PRODUCT_ID 0x0650
 
 //
 // Define the default configuration value and interface.
@@ -158,6 +166,8 @@ typedef struct _OPTION_LIST {
     int UseIndex;
     int UseStdin;
     int SkipDeviceCount;
+    char *SerialNumber;
+    int ListDeviceSerialNumbers;
 } OPTION_LIST, *POPTION_LIST;
 
 //
@@ -303,6 +313,46 @@ Return Value:
         } else if (strcmp(Argument, "i") == 0) {
             Options.UseStdin = TRUE;
 
+        //
+        // 'l' lists the serial numbers of all devices in the system.
+        //
+
+        } else if (strcmp(Argument, "l") == 0) {
+            Options.ListDeviceSerialNumbers = 1;
+
+        //
+        // 'r' specifies the serial number of the device to interact with.
+        //
+
+        } else if (strcmp(Argument, "r") == 0) {
+            if (argc <= 2) {
+                printf("Error: -r requires a device serial number.\n");
+                return 1;
+            }
+
+            argc -= 1;
+            argv += 1;
+            Options.SerialNumber = argv[1];
+
+        //
+        // 's' specifies to skip a given number of eligible devices.
+        //
+
+        } else if (strcmp(Argument, "s") == 0) {
+            if ((argc <= 2) || (argv[2][0] == '-')) {
+                printf("Error: -s requires an integer argument after it.\n");
+                printf(USAGE_STRING);
+                return 1;
+            }
+
+            Options.SkipDeviceCount = strtol(argv[2], NULL, 10);
+            if (Options.SkipDeviceCount <= 0) {
+                Options.SkipDeviceCount = 0;
+            }
+
+            argc -= 1;
+            argv += 1;
+
         } else {
             printf("%s: Invalid option\n\n%s", Argument, USAGE_STRING);
             return 1;
@@ -317,7 +367,9 @@ Return Value:
     // then fail and print the usage.
     //
 
-    if (((argc < 2) && (Options.UseStdin == FALSE)) || (argc > 3)) {
+    if (((argc < 2) && (Options.UseStdin == FALSE) &&
+         (Options.ListDeviceSerialNumbers == FALSE)) || (argc > 3)) {
+
         printf(USAGE_STRING);
         return 1;
     }
@@ -367,7 +419,8 @@ Return Value:
 
     if ((Options.Command != UsbRelayCommandGetState) &&
         (Options.Command != UsbRelayCommandGetDefaults) &&
-        (Options.UseStdin == FALSE)) {
+        (Options.UseStdin == FALSE) &&
+        (Options.ListDeviceSerialNumbers == FALSE)) {
 
         Result = sscanf(ValueString, "%i", &(Options.Value));
         if (Result != 1) {
@@ -456,6 +509,10 @@ Return Value:
                 //
 
                 UsbBus = UsbBus->next;
+            }
+
+            if (Options.ListDeviceSerialNumbers != FALSE) {
+                goto mainEnd;
             }
         }
 
@@ -675,7 +732,10 @@ Return Value:
 
     int ChildIndex;
     struct usb_device *FoundDevice;
+    usb_dev_handle *Handle;
     int RecursionIndex;
+    int Result;
+    char SerialNumber[256];
 
     for (RecursionIndex = 0;
          RecursionIndex < RecursionLevel;
@@ -696,7 +756,43 @@ Return Value:
         (Device->descriptor.idProduct == USBRELAY_PRODUCT_ID)) {
 
         VERBOSE_PRINT(" <-- Found Device.");
-        if (*SkipDeviceCount != 0) {
+        if ((Options.SerialNumber != NULL) ||
+            (Options.ListDeviceSerialNumbers != FALSE)) {
+
+            if (Device->descriptor.iSerialNumber != 0) {
+                Result = -1;
+                Handle = usb_open(Device);
+                Result = usb_get_string_simple(Handle,
+                                               Device->descriptor.iSerialNumber,
+                                               SerialNumber,
+                                               sizeof(SerialNumber));
+
+                usb_close(Handle);
+                if (Result > 0) {
+                    if (Options.ListDeviceSerialNumbers != FALSE) {
+                        printf("%s\n", SerialNumber);
+
+                    } else {
+                        if (strcmp(SerialNumber, Options.SerialNumber) == 0) {
+                            VERBOSE_PRINT("Found Device with Serial %s.\n",
+                                          SerialNumber);
+
+                            return Device;
+
+                        } else {
+                            VERBOSE_PRINT("Device serial number %s does not "
+                                          "match requested: %s.\n",
+                                          SerialNumber,
+                                          Options.SerialNumber);
+                        }
+                    }
+
+                } else {
+                    VERBOSE_PRINT("Unable to get serial number.\n");
+                }
+            }
+
+        } else if (*SkipDeviceCount != 0) {
             VERBOSE_PRINT(" Skipping %d.\n", *SkipDeviceCount);
             *SkipDeviceCount -= 1;
 

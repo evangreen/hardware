@@ -67,6 +67,12 @@ Environment:
 #define USBLED_SET_DISPLAY 0
 
 //
+// This command gets the state of the button.
+//
+
+#define USBLED_GET_BUTTON_STATE 1
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
@@ -101,6 +107,7 @@ Return Value:
 
 unsigned char DigitState[USBLED_DIGIT_COUNT];
 unsigned char CurrentCursor;
+unsigned char ButtonPressed;
 unsigned char CharacterToDigit[] PROGMEM = {
     0xAF, // 0
     0x21, // 1
@@ -150,13 +157,20 @@ Return Value:
 {
 
     unsigned char Request;
+    unsigned char ReturnCount;
 
     Request = Data[1];
+    ReturnCount = 0;
     if (Request == USBLED_SET_DISPLAY) {
         CurrentCursor = 0;
+
+    } else if (Request == USBLED_GET_BUTTON_STATE) {
+        Data[0] = ButtonPressed;
+        ButtonPressed = 0;
+        ReturnCount = 1;
     }
 
-    return 0;
+    return ReturnCount;
 }
 
 extern
@@ -319,6 +333,8 @@ Return Value:
 
     unsigned char Column;
 
+    ButtonPressed = 0;
+
     //
     // Set up the I/O port initial values and data direction registers.
     //
@@ -407,6 +423,14 @@ Return Value:
         Column += 1;
         if (Column == 8) {
             Column = 0;
+        }
+
+        //
+        // Check the button state.
+        //
+
+        if ((PINB & BUTTON_BIT) == 0) {
+            ButtonPressed = 1;
         }
     }
 

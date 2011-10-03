@@ -47,8 +47,8 @@
 // else, like for instance product ID 0x6666, which is registered as
 // "Prototype product Vendor ID".
 
-#define    USBTINY_VENDOR_ID        0x0F68
-#define    USBTINY_DEVICE_ID        0x1986
+#define    USBTINY_VENDOR_ID        0x8619
+//#define    USBTINY_DEVICE_ID        0x0650
 
 // The version of the device as a 16-bit number: 256*major + minor.
 #define    USBTINY_DEVICE_VERSION        0x101
@@ -56,7 +56,7 @@
 // The following optional macros may be used as an identification of
 // your device. Undefine them when you run out of flash space.
 #define    USBTINY_VENDOR_NAME        "One Ring Road"
-#define    USBTINY_DEVICE_NAME        "USB LED Display"
+//#define    USBTINY_DEVICE_NAME        "USB LED Display"
 //#undef    USBTINY_SERIAL
 
 // Define the device class, subclass and protocol. Device class 0xff

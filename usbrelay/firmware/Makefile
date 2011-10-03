@@ -67,6 +67,11 @@ OBJCOPY = avr-objcopy
 SIZE = avr-size
 endif
 
+LOT_NUMBER = "1"
+BUILD_TIME = "$(shell date +"%y%m%d-%k%M%S")"
+REVISION = "$(shell svn info | grep Revision | sed 's/Revision: //g')"
+SERIAL_NUMBER = $(LOT_NUMBER)-$(REVISION)-$(BUILD_TIME)
+
 #
 # VPATH specifies which directories make should look in to find all files.
 # Paths are separated by colons.
@@ -81,7 +86,7 @@ VPATH = .:$(OBJROOT):
 CCOPTIONS = -Wall -Werror -Os -gstabs+ -I.
 
 ifeq (avr, $(ARCH))
-CCOPTIONS += -mmcu=$(MCU) -D_AVR_
+CCOPTIONS += -mmcu=$(MCU) -D_AVR_ -DUSBTINY_SERIAL=\"$(SERIAL_NUMBER)\"
 endif
 
 LDOPTIONS = -g -Wl,-Map=$@.map
@@ -101,7 +106,7 @@ ASOPTIONS = -mmcu=$(MCU) -Os -c -x assembler-with-cpp -D__ASSEMBLY__
 
 all: $(OBJROOT) $(BINROOT) $(BINARY)
 
-program: all
+program: wipe all
 	avrdude -c usbtiny -p$(PROGMCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
 
 #

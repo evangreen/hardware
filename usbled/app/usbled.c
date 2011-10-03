@@ -92,7 +92,7 @@ Environment:
     "            default the time shows in the form \"hh mm ss\" in 12-hour\n"\
     "            format. Various options below can refine the display of\n"\
     "            the current time.\n\n"\
-    "   -s       Current time, short form. Shows the current time of the day\n"\
+    "   -g       Current time, short form. Shows the current time of the day\n"\
     "            in the form \"hh.mm\". This form only takes up 4\n"\
     "            characters, where the long form takes up 8.\n\n"\
     "Options:\n\n"\
@@ -109,6 +109,12 @@ Environment:
     "            LED or USB LED Mini device for this command. If there are\n"\
     "            multiple USB LED devices connected to the system, use this\n"\
     "            option to talk to a specific one.\n\n"\
+    "    -l      Print the serial number of every USB LED device connected\n" \
+    "            to the system, then exit.\n\n"\
+    "    -r <num>   Attempt to connect to the device with the given serial\n"\
+    "            number. Use the -l switch to get the serial numbers of all\n"\
+    "            connected devices.\n\n"\
+    "    -o      Print the current state of the button on the display.\n\n"\
     "    -h or --help  Shows this help message.\n\n"\
     "Values:\n\n"\
     "    <value> The value to display on the LED display, in quotes if\n" \
@@ -158,8 +164,9 @@ Environment:
 // Define the vendor and device ID of the USB LED controller.
 //
 
-#define USBLED_VENDOR_ID 0x0F68
-#define USBLED_PRODUCT_ID 0x1986
+#define USBLED_VENDOR_ID 0x8619
+#define USBLED_PRODUCT_ID 0x0651
+#define USBLED_MINI_PRODUCT_ID 0x0652
 
 //
 // Define the default configuration value and interface.
@@ -189,6 +196,19 @@ Environment:
 #define USBLED_MAX_STRING_LENGTH 255
 
 //
+// Define USB LED commands.
+// This command writes a value to the LEDs.
+//
+
+#define USBLED_COMMAND_WRITE 0
+
+//
+// This command checks the button state.
+//
+
+#define USBLED_COMMAND_GET_BUTTON_STATE 1
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -211,6 +231,9 @@ typedef struct _OPTION_LIST {
     int ShowBlinkyDecimals;
     int SkipDeviceCount;
     char *StringToWrite;
+    char *SerialNumber;
+    int ListDeviceSerialNumbers;
+    int PrintButtonState;
 } OPTION_LIST, *POPTION_LIST;
 
 //
@@ -257,6 +280,12 @@ PrintEndpoint (
 void
 MillisecondSleep (
     unsigned int Milliseconds
+    );
+
+int
+ReadButtonState (
+    usb_dev_handle *Handle,
+    int *ButtonState
     );
 
 int
@@ -346,6 +375,7 @@ Return Value:
 {
 
     char *Argument;
+    int ButtonState;
     int CurrentLine;
     struct usb_device *Device;
     int DevicesChanged;
@@ -494,6 +524,34 @@ Return Value:
             printf(USAGE_STRING);
             return 1;
 
+        //
+        // 'l' lists the serial numbers of all devices in the system.
+        //
+
+        } else if (strcmp(Argument, "l") == 0) {
+            Options.ListDeviceSerialNumbers = 1;
+
+        //
+        // 'r' specifies the serial number of the device to interact with.
+        //
+
+        } else if (strcmp(Argument, "r") == 0) {
+            if (argc <= 2) {
+                printf("Error: -r requires a device serial number.\n");
+                return 1;
+            }
+
+            argc -= 1;
+            argv += 1;
+            Options.SerialNumber = argv[1];
+
+        //
+        // 'o' prints the output of the button.
+        //
+
+        } else if (strcmp(Argument, "o") == 0) {
+            Options.PrintButtonState = 1;
+
         } else {
             printf("%s: Invalid option\n\n%s", Argument, USAGE_STRING);
             return 1;
@@ -526,7 +584,10 @@ Return Value:
     // then fail and print the usage.
     //
 
-    if ((argc < 2) && (Options.Selection[0] == StockFeatureInvalid)) {
+    if ((argc < 2) && (Options.Selection[0] == StockFeatureInvalid) &&
+        (Options.ListDeviceSerialNumbers == FALSE) &&
+        (Options.PrintButtonState == FALSE)) {
+
         printf(USAGE_STRING);
         return 1;
     }
@@ -607,6 +668,10 @@ Return Value:
 
                 UsbBus = UsbBus->next;
             }
+
+            if (Options.ListDeviceSerialNumbers != FALSE) {
+                goto mainEnd;
+            }
         }
 
         //
@@ -629,6 +694,18 @@ Return Value:
             //
 
             if (Options.StringToWrite == NULL) {
+                if (Options.PrintButtonState != FALSE) {
+                    ButtonState = 0;
+                    Result = ReadButtonState(Handle, &ButtonState);
+                    if (Result <= 0) {
+                        printf("Error: Failed to get button state.\n");
+                        goto mainEnd;
+                    }
+
+                    printf("%x", ButtonState);
+                    goto mainEnd;
+                }
+
                 while (TRUE) {
 
                     //
@@ -816,7 +893,10 @@ Return Value:
 
     int ChildIndex;
     struct usb_device *FoundDevice;
+    usb_dev_handle *Handle;
     int RecursionIndex;
+    int Result;
+    char SerialNumber[256];
 
     for (RecursionIndex = 0;
          RecursionIndex < RecursionLevel;
@@ -834,10 +914,47 @@ Return Value:
     //
 
     if ((Device->descriptor.idVendor == USBLED_VENDOR_ID) &&
-        (Device->descriptor.idProduct == USBLED_PRODUCT_ID)) {
+        ((Device->descriptor.idProduct == USBLED_PRODUCT_ID) ||
+         (Device->descriptor.idProduct == USBLED_MINI_PRODUCT_ID))) {
 
         VERBOSE_PRINT(" <-- Found Device.");
-        if (*SkipDeviceCount != 0) {
+        if ((Options.SerialNumber != NULL) ||
+            (Options.ListDeviceSerialNumbers != FALSE)) {
+
+            if (Device->descriptor.iSerialNumber != 0) {
+                Result = -1;
+                Handle = usb_open(Device);
+                Result = usb_get_string_simple(Handle,
+                                               Device->descriptor.iSerialNumber,
+                                               SerialNumber,
+                                               sizeof(SerialNumber));
+
+                usb_close(Handle);
+                if (Result > 0) {
+                    if (Options.ListDeviceSerialNumbers != FALSE) {
+                        printf("%s\n", SerialNumber);
+
+                    } else {
+                        if (strcmp(SerialNumber, Options.SerialNumber) == 0) {
+                            VERBOSE_PRINT("Found Device with Serial %s.\n",
+                                          SerialNumber);
+
+                            return Device;
+
+                        } else {
+                            VERBOSE_PRINT("Device serial number %s does not "
+                                          "match requested: %s.\n",
+                                          SerialNumber,
+                                          Options.SerialNumber);
+                        }
+                    }
+
+                } else {
+                    VERBOSE_PRINT("Unable to get serial number.\n");
+                }
+            }
+
+        } else if (*SkipDeviceCount != 0) {
             VERBOSE_PRINT(" Skipping %d.\n", *SkipDeviceCount);
             *SkipDeviceCount -= 1;
 
@@ -1206,6 +1323,62 @@ Return Value:
 }
 
 int
+ReadButtonState (
+    usb_dev_handle *Handle,
+    int *ButtonState
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads whether or not there has been a button press on the LED
+    device.
+
+Arguments:
+
+    Handle - Supplies a pointer to the open device.
+
+    ButtonState - Supplies a pointer where the button state will be returned.
+        The value will be zero if the button has not been pressed since the
+        last time it was checked, or 1 if the button was pressed since the last
+        time it was checked.
+
+Return Value:
+
+    Returns >= 0 on success.
+
+    Returns < 0 on failure.
+
+--*/
+
+{
+
+    unsigned long RequestType;
+    int Result;
+
+    RequestType = USB_ENDPOINT_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE;
+    Result = usb_control_msg(Handle,
+                             RequestType,
+                             USBLED_COMMAND_GET_BUTTON_STATE,
+                             0,
+                             0,
+                             (char *)ButtonState,
+                             1,
+                             USBLED_TIMEOUT);
+
+    if (Result < 0) {
+        printf("Error writing command, got %d of %d bytes.\n"
+               "Status: %s\n",
+               Result,
+               1,
+               strerror(-Result));
+    }
+
+    return Result;
+}
+
+int
 WriteStringToLeds (
     usb_dev_handle *Handle,
     char *String
@@ -1238,7 +1411,7 @@ Return Value:
 
     Result = usb_control_msg(Handle,
                              USB_TYPE_VENDOR | USB_RECIP_DEVICE,
-                             0,
+                             USBLED_COMMAND_WRITE,
                              0,
                              0,
                              String,
