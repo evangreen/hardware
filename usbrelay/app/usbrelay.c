@@ -1259,7 +1259,7 @@ Return Value:
                              Command,
                              0,
                              0,
-                             Value,
+                             (char *)Value,
                              1,
                              USBRELAY_TIMEOUT);
 
