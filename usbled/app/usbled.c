@@ -115,6 +115,8 @@ Environment:
     "            number. Use the -l switch to get the serial numbers of all\n"\
     "            connected devices.\n\n"\
     "    -o      Print the current state of the button on the display.\n\n"\
+    "    -i      Grab the input from stdin instead of the command line.\n\n"\
+    "    -e      Exit immediately if no devices are found.\n\n"\
     "    -h or --help  Shows this help message.\n\n"\
     "Values:\n\n"\
     "    <value> The value to display on the LED display, in quotes if\n" \
@@ -234,6 +236,8 @@ typedef struct _OPTION_LIST {
     char *SerialNumber;
     int ListDeviceSerialNumbers;
     int PrintButtonState;
+    int UseStdin;
+    int ExitImmediately;
 } OPTION_LIST, *POPTION_LIST;
 
 //
@@ -481,6 +485,20 @@ Return Value:
             Options.MilitaryTime = TRUE;
 
         //
+        // 'i' grabs input from stdin instead of the command line.
+        //
+        
+        } else if (strcmp(Argument, "i") == 0) {
+            Options.UseStdin = TRUE;
+           
+        //
+        // 'e' exits immediately if no devices are found.
+        //
+        
+        } else if (strcmp(Argument, "e") == 0) {
+            Options.ExitImmediately = TRUE;
+            
+        //
         // 's' skips the first N eligible devices.
         //
 
@@ -586,7 +604,8 @@ Return Value:
 
     if ((argc < 2) && (Options.Selection[0] == StockFeatureInvalid) &&
         (Options.ListDeviceSerialNumbers == FALSE) &&
-        (Options.PrintButtonState == FALSE)) {
+        (Options.PrintButtonState == FALSE) &&
+        (Options.UseStdin == FALSE)) {
 
         printf(USAGE_STRING);
         return 1;
@@ -669,7 +688,9 @@ Return Value:
                 UsbBus = UsbBus->next;
             }
 
-            if (Options.ListDeviceSerialNumbers != FALSE) {
+            if ((Options.ListDeviceSerialNumbers != FALSE) ||
+                (Options.ExitImmediately != FALSE)) {
+                
                 goto mainEnd;
             }
         }
@@ -707,12 +728,25 @@ Return Value:
                 }
 
                 while (TRUE) {
-
+                    StringOffset = 0;
+                    
+                    //
+                    // If input is coming from stdin, get the input now.
+                    //
+                    
+                    if (Options.UseStdin != FALSE) {
+                        Result = scanf("%s", String);
+                        if (Result != 1) {
+                            goto mainEnd;
+                        }
+                        
+                        StringOffset = strlen(String);
+                    }
+                    
                     //
                     // Create the string based on the requested features.
                     //
 
-                    StringOffset = 0;
                     for (CurrentLine = 0;
                          CurrentLine < USBLED_MAX_ROWS;
                          CurrentLine += 1) {
