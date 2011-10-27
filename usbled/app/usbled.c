@@ -638,6 +638,10 @@ Return Value:
             //
 
             if (DevicesChanged == 0) {
+            	if (Options.ExitImmediately != FALSE) {
+            		goto mainEnd;
+            	}
+            	
                 MillisecondSleep(250);
                 continue;
             }
@@ -688,9 +692,7 @@ Return Value:
                 UsbBus = UsbBus->next;
             }
 
-            if ((Options.ListDeviceSerialNumbers != FALSE) ||
-                (Options.ExitImmediately != FALSE)) {
-                
+            if (Options.ListDeviceSerialNumbers != FALSE) {
                 goto mainEnd;
             }
         }
