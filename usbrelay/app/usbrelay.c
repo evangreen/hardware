@@ -84,12 +84,14 @@ Environment:
     "    The -l options lists the serial numbers of all connected devices."    \
     "\n\n "                                                                    \
     "    The -r option specifies the serial number of the device to interact " \
+    "with.\n\n"                                                                \
     "    The -s option specifies to skip a given number of eligible devices\n" \
     "        before interacting with one. This method can be used instead of\n"\
     "        specifying a full serial number when interacting with multiple\n" \
     "        devices. Example: usbrelay -s 1 0x7 programs the value 7 into\n"  \
     "        the second USB Relay device that can be found.\n\n"               \
-    "with.\n\n"                                                                \
+    "    The -e option tells the command to exit immediately if no eligible\n" \
+    "        devices can be found.\n\n"                                        \
     "Commands:\n"                                                              \
     "    set - Set the state of all relays (and LEDs) to the given value.\n"   \
     "    on - Enable the given mask of relays, leaving the state of relays\n"  \
@@ -168,6 +170,7 @@ typedef struct _OPTION_LIST {
     int SkipDeviceCount;
     char *SerialNumber;
     int ListDeviceSerialNumbers;
+    int ExitImmediately;
 } OPTION_LIST, *POPTION_LIST;
 
 //
@@ -275,6 +278,7 @@ Return Value:
     usb_dev_handle *Handle;
     int Result;
     struct usb_device *PotentialDevice;
+    int ReturnValue;
     int SkipDeviceCount;
     struct usb_bus *UsbBus;
     char *ValueString;
@@ -283,6 +287,7 @@ Return Value:
     Handle = NULL;
     Options.Command = UsbRelayCommandSet;
     ValueString = NULL;
+    ReturnValue = 0;
 
     //
     // Process the command line options
@@ -352,6 +357,13 @@ Return Value:
 
             argc -= 1;
             argv += 1;
+
+        //
+        // 'e' specifies to exit immediately if no eligible device is found.
+        //
+
+        } else if (strcmp(Argument, "e") == 0) {
+            Options.ExitImmediately = 1;
 
         } else {
             printf("%s: Invalid option\n\n%s", Argument, USAGE_STRING);
@@ -461,6 +473,11 @@ Return Value:
             //
 
             if (DevicesChanged == 0) {
+                if (Options.ExitImmediately != 0) {
+                    ReturnValue = 2;
+                    goto mainEnd;
+                }
+
                 MillisecondSleep(250);
                 continue;
             }
@@ -543,6 +560,7 @@ Return Value:
                 if (Options.UseStdin != FALSE) {
                     Result = scanf("%d", &(Options.Value));
                     if (Result != 1) {
+                        ReturnValue = 1;
                         goto mainEnd;
                     }
                 }
@@ -614,7 +632,7 @@ mainEnd:
         Handle = NULL;
     }
 
-    return 0;
+    return ReturnValue;
 }
 
 //
