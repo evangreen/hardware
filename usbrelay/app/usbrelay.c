@@ -272,7 +272,6 @@ Return Value:
 {
 
     char *Argument;
-    int CurrentLine;
     struct usb_device *Device;
     int DevicesChanged;
     usb_dev_handle *Handle;
@@ -283,7 +282,6 @@ Return Value:
     struct usb_bus *UsbBus;
     char *ValueString;
 
-    CurrentLine = 0;
     Handle = NULL;
     Options.Command = UsbRelayCommandSet;
     ValueString = NULL;
@@ -1211,10 +1209,8 @@ Return Value:
 
     unsigned long RequestType;
     int Result;
-    int PackedCommand;
 
     VERBOSE_PRINT("Sending Command %d, value 0x%x.\n", Command, Value);
-    PackedCommand = Command | ((unsigned int)Value << 8);
     RequestType = USB_ENDPOINT_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE;
     Result = usb_control_msg(Handle,
                              RequestType,
