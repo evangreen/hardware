@@ -39,21 +39,6 @@ Environment:
 #define MATRIX_PROTOCOL_COLUMN_OFFSET 0
 
 //
-// Define the magic sequence used to get lost listeners back in sync.
-//
-
-#define SYNC_BYTE0 0x5A
-#define SYNC_BYTE1 0x5B
-#define SYNC_BYTE2 0x5C
-
-//
-// Define the size of the protocol grid.
-//
-
-#define MATRIX_PROTOCOL_ROWS 24
-#define MATRIX_PROTOCOL_COLUMNS 24
-
-//
 // Define the length of the SPI buffer.
 //
 

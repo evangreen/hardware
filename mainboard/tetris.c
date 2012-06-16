@@ -56,7 +56,7 @@ Environment:
 // Define the initial drop rate, in ms.
 //
 
-#define TETRIS_INITIAL_DROP_RATE 750
+#define TETRIS_INITIAL_DROP_RATE (650 * 32)
 
 //
 // Define how the drop rate increases with each level.
@@ -154,8 +154,8 @@ Return Value:
 {
 
     UCHAR CurrentPiece;
-    USHORT TimeToUpdate;
     UCHAR GameRunning;
+    ULONG NextUpdateTime;
     UCHAR Level;
     UCHAR LinesCompleted;
     APPLICATION NextApplication;
@@ -187,7 +187,7 @@ Return Value:
         CurrentPiece = TETRIS_INVALID_PIECE;
         KeTrackball1 = RGB_PIXEL(0, 0, MAX_INTENSITY);
         KeTrackball2 = 0;
-        TimeToUpdate = UpdateInterval;
+        NextUpdateTime = KeRawTime + UpdateInterval;
         LinesCompleted = 0;
         Level = 0;
         while (GameRunning != FALSE) {
@@ -214,7 +214,6 @@ Return Value:
             //
 
             KeStall(32);
-            TimeToUpdate += 1;
             if ((KeInputEdges & INPUT_LEFT1) != 0) {
                 KeInputEdges &= ~INPUT_LEFT1;
                 TtpMovePiece(&PieceX, &PieceY, -1, 0);
@@ -227,7 +226,7 @@ Return Value:
 
             if ((KeInputEdges & INPUT_DOWN1) != 0) {
                 KeInputEdges &= ~INPUT_DOWN1;
-                TimeToUpdate = UpdateInterval;
+                NextUpdateTime = KeRawTime + UpdateInterval;
             }
 
             if ((KeInputEdges & INPUT_UP1) != 0) {
@@ -239,8 +238,12 @@ Return Value:
             // If the update interval has gone by, move the piece down.
             //
 
-            if (TimeToUpdate == UpdateInterval) {
-                TimeToUpdate = 0;
+            if (KeRawTime >= NextUpdateTime) {
+                NextUpdateTime = KeRawTime + UpdateInterval;
+                if (NextUpdateTime < KeRawTime) {
+                    NextUpdateTime = 0xFFFFFFFFUL;
+                }
+
                 PieceMoved = TtpMovePiece(&PieceX, &PieceY, 0, 1);
                 if (PieceMoved == FALSE) {
                     LinesCompleted += TtpHandlePieceLockdown(PieceX, PieceY);
@@ -272,6 +275,8 @@ Return Value:
             if (NextApplication != ApplicationNone) {
                 return NextApplication;
             }
+
+            KeStall(1);
         }
 
         KeInputEdges &= ~INPUT_BUTTON1;
@@ -501,7 +506,7 @@ Return Value:
     // Move the piece right.
     //
 
-    if (VectorX > 0) {
+    if (VectorX == 1) {
 
         //
         // Check if every row can handle the move right.
@@ -559,7 +564,7 @@ Return Value:
     // Move the piece left.
     //
 
-    } else if (VectorX < 0) {
+    } else if (VectorX != 0) {
 
         //
         // Check if every row can handle the move left.
@@ -614,17 +619,10 @@ Return Value:
         }
 
     //
-    // Move the piece up. Not implemented.
-    //
-
-    } else if (VectorY < 0) {
-        OkayToMove = FALSE;
-
-    //
     // Move the piece down.
     //
 
-    } else if (VectorY > 0) {
+    } else if (VectorY == 1) {
 
         //
         // Check if every column can move down.
@@ -690,6 +688,13 @@ Return Value:
 
             *PieceY += 1;
         }
+
+    //
+    // Move the piece up. Not implemented.
+    //
+
+    } else if (VectorY != 0) {
+        OkayToMove = FALSE;
     }
 
     return OkayToMove;

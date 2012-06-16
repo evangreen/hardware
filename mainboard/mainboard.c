@@ -64,6 +64,7 @@ volatile USHORT KeWhiteLeds;
 // Define the current time variables.
 //
 
+volatile ULONG KeRawTime;
 volatile USHORT KeCurrentTime;
 volatile UCHAR KeCurrentHalfSeconds;
 volatile UCHAR KeCurrentMinutes;
@@ -137,8 +138,6 @@ Return Value:
     UCHAR Application;
     PAPPLICATION_ENTRY ApplicationEntry;
     UCHAR LoopCount;
-    CHAR String1[2];
-    CHAR String2[2];
 
     //
     // Initialize the hardware.
@@ -150,7 +149,7 @@ Return Value:
     // When first plugged in, the unit starts off.
     //
 
-    KepRunStandby();
+    //KepRunStandby();
 
     //
     // Loop running applications. The return from the previous application tells
@@ -169,18 +168,14 @@ Return Value:
         while (Application == ApplicationNone) {
             KeInputEdges |= INPUT_MENU;
             Application = KeRunMenu();
-
-            String1[0] = '0' + Application;
-            String1[1] = '\0';
-            String2[0] = '0' + LoopCount;
-            String2[1] = '\0';
             LoopCount += 1;
+            KeStall(1);
         }
 
-        HlSetLcdText(String1, String2);
+        HlClearLcdScreen();
         KeStall(32 * 1000UL * 2);
-        HlSetLcdText(KeBlankString, KeBlankString);
-        ApplicationEntry = KeApplicationEntryPoint[Application - 1];
+        ApplicationEntry = RtlReadProgramSpacePointer(
+                                  &(KeApplicationEntryPoint[Application - 1]));
 
         //
         // Run the application.
@@ -221,6 +216,7 @@ Return Value:
 {
 
     USHORT InterestingInputs;
+    PPGM NamePointer;
     USHORT OldTrackball1;
     USHORT OldTrackball2;
     USHORT OldWhiteLeds;
@@ -259,7 +255,12 @@ Return Value:
     KeWhiteLeds = TRACKBALL2_WHITEPIXEL(MAX_INTENSITY);
     Selection = ApplicationNone + 1;
     while (TRUE) {
-        HlSetLcdText(KeApplicationNames[Selection - 1], KeBlankString);
+        HlClearLcdScreen();
+        HlSetLcdAddress(LCD_FIRST_LINE);
+        NamePointer =
+               RtlReadProgramSpacePointer(&(KeApplicationNames[Selection - 1]));
+
+        HlLcdPrintStringFromFlash(NamePointer);
 
         //
         // Spin while nothing is happening.
@@ -353,6 +354,7 @@ Return Value:
 
     UCHAR MonthChanging;
 
+    KeRawTime += TimePassed;
     MonthChanging = FALSE;
     KeCurrentTime += TimePassed;
     while (KeCurrentTime >= 32 * 500) {
@@ -471,67 +473,25 @@ Return Value:
 
 {
 
-    UCHAR CurrentHalfSeconds;
-    USHORT CurrentTime;
-    USHORT EndTime;
+    ULONG EndTime;
+    ULONG StartTime;
 
-    CurrentHalfSeconds = KeCurrentHalfSeconds;
-    CurrentTime = KeCurrentTime;
-    while (StallTime >= 32 * 500) {
-
-        //
-        // Wait for the time to roll over to 0.
-        //
-
-        while (KeCurrentHalfSeconds == CurrentHalfSeconds) {
-            NOTHING;
-        }
-
-        CurrentHalfSeconds += 1;
-        if (CurrentHalfSeconds == 60 * 2) {
-            CurrentHalfSeconds = 0;
-        }
-
-        //
-        // Wait for the time to catch up to this time.
-        //
-
-        while ((KeCurrentTime < CurrentTime) &&
-               (KeCurrentHalfSeconds == CurrentHalfSeconds)) {
-
-            NOTHING;
-        }
-
-        StallTime -= 32 * 500;
-    }
-
-    EndTime = CurrentTime + (USHORT)StallTime;
-    if (EndTime > 32 * 500) {
-        EndTime -= 32 * 500;
-    }
+    StartTime = KeRawTime;
+    EndTime = StartTime + StallTime;
+    HlUpdateDisplay();
 
     //
-    // If there's a rollover involved, wait for that.
+    // If the ending time wraps around, wait for the current time to wrap
+    // around.
     //
 
-    if (EndTime < CurrentTime) {
-        while (KeCurrentHalfSeconds == CurrentHalfSeconds) {
+    if (EndTime < StartTime) {
+        while (KeRawTime >= StartTime) {
             NOTHING;
-        }
-
-        CurrentHalfSeconds += 1;
-        if (CurrentHalfSeconds == 60 * 2) {
-            CurrentHalfSeconds = 0;
         }
     }
 
-    //
-    // Wait for current time to pass the end time.
-    //
-
-    while ((KeCurrentTime < EndTime) &&
-           (KeCurrentHalfSeconds == CurrentHalfSeconds)) {
-
+    while (KeRawTime < EndTime) {
         NOTHING;
     }
 
@@ -613,7 +573,7 @@ Return Value:
     // Clear the LCD.
     //
 
-    HlSetLcdText(KeBlankString, KeBlankString);
+    HlClearLcdScreen();
 
     //
     // Spin fading the standby light in and out.

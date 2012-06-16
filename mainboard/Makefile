@@ -24,14 +24,14 @@
 BINARY := mainboard
 
 OBJS := clock.o     \
+        fontdata.o  \
         mainboard.o \
         life.o      \
         sokoban.o   \
         sokodata.o  \
         tetris.o    \
 
-X86_OBJS := fontdata.o \
-            x86\winmain.o \
+X86_OBJS := x86\winmain.o
 
 AVR_OBJS := avr/avrmain.o
 
@@ -107,9 +107,12 @@ ASOPTIONS = --gstabs+                                           \
 # have files associated with them.
 #
 
-.PHONY: prebuild all clean
+.PHONY: prebuild all clean program
 
 all: $(OBJROOT) $(BINROOT) $(BINARY)
+
+program: all
+	avrdude -c usbtiny -p$(MCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0x01:m
 
 #
 # The dependencies of the binary object depend on the architecture and type of

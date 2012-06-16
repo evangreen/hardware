@@ -126,6 +126,12 @@ Author:
 #define TIMER0_COMPARE_B 0x48
 #define TIMER0_INTERRUPT_ENABLE 0x6E
 #define TIMER1_INTERRUPT_ENABLE 0x6F
+#define ADC_CONTROL_A 0x7A
+#define ADC_CONTROL_B 0x7B
+#define ADC_SELECTOR 0x7C
+#define ADC_DIGITAL_INPUT_DISABLE 0x7E
+#define ADC_DATA_LOW 0x78
+#define ADC_DATA_HIGH 0x79
 #define TIMER1_CONTROL_B 0x81
 #define TIMER1_COUNTER_LOW 0x84
 #define TIMER1_COMPARE_A_LOW 0x88
@@ -180,6 +186,28 @@ Author:
 //
 
 #define SPI_STATUS_INTERRUPT 0x80
+
+//
+// Analog to Digital (ADC) Control A bits.
+//
+
+#define ADC_CONTROL_A_GLOBAL_ENABLE 0x80
+#define ADC_CONTROL_A_START_CONVERSION 0x40
+#define ADC_CONTROL_A_PRESCALE_128 0x7
+
+//
+// Analog to Digital (ADC) Control B bits.
+//
+
+#define ADC_CONTROL_B_FREE_RUNNING 0x00
+
+//
+// Analog to Digital (ADC) Selector bits.
+//
+
+#define ADC_SELECTOR_AREF 0x00
+#define ADC_SELECTOR_AVCC 0x40
+#define ADC_SELECTOR_1V 0xC0
 
 //
 // Valid ISR Vectors.

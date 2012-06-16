@@ -42,6 +42,77 @@ typedef const void *PPGM;
 #endif
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+#ifdef _AVR_
+
+//
+// These macros are used to read from program space. Only used internally.
+//
+
+#define __LPM_enhanced__(addr)  \
+(__extension__({                \
+    USHORT __addr16 = (USHORT)(addr); \
+    UCHAR __result;             \
+    __asm__                     \
+    (                           \
+        "lpm %0, Z" "\n\t"      \
+        : "=r" (__result)       \
+        : "z" (__addr16)        \
+    );                          \
+    __result;                   \
+}))
+
+#define __LPM_word_enhanced__(addr)         \
+(__extension__({                            \
+    USHORT __addr16 = (USHORT)(addr);       \
+    USHORT __result;                        \
+    __asm__                                 \
+    (                                       \
+        "lpm %A0, Z+"   "\n\t"              \
+        "lpm %B0, Z"    "\n\t"              \
+        : "=r" (__result), "=z" (__addr16)  \
+        : "1" (__addr16)                    \
+    );                                      \
+    __result;                               \
+}))
+
+#define __LPM_dword_enhanced__(addr)        \
+(__extension__({                            \
+    USHORT __addr16 = (USHORT)(addr);       \
+    ULONG __result;                         \
+    __asm__                                 \
+    (                                       \
+        "lpm %A0, Z+"   "\n\t"              \
+        "lpm %B0, Z+"   "\n\t"              \
+        "lpm %C0, Z+"   "\n\t"              \
+        "lpm %D0, Z"    "\n\t"              \
+        : "=r" (__result), "=z" (__addr16)  \
+        : "1" (__addr16)                    \
+    );                                      \
+    __result;                               \
+}))
+
+//
+// These macros can be used externally for reading program space.
+//
+
+#define RtlReadProgramSpace8(_Address) __LPM_enhanced__(_Address)
+#define RtlReadProgramSpace16(_Address) __LPM_word_enhanced__(_Address)
+#define RtlReadProgramSpace32(_Address) __LPM_dword_enhanced__(_Address)
+#define RtlReadProgramSpacePointer (PVOID)RtlReadProgramSpace16
+
+#else
+
+#define RtlReadProgramSpace8(_Address) *((PUCHAR)(_Address))
+#define RtlReadProgramSpace16(_Address) *((PUSHORT)(_Address))
+#define RtlReadProgramSpace32(_Address) *((PULONG)(_Address))
+#define RtlReadProgramSpacePointer(_Address) *((PVOID *)(_Address))
+
+#endif
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -66,6 +137,21 @@ typedef const void *PPGM;
 
 #define TRUE 1
 #define FALSE 0
+
+//
+// Define the magic sequence used to get lost listeners back in sync.
+//
+
+#define SYNC_BYTE0 0x5A
+#define SYNC_BYTE1 0x5B
+#define SYNC_BYTE2 0x5C
+
+//
+// Define the size of the protocol grid.
+//
+
+#define MATRIX_PROTOCOL_ROWS 24
+#define MATRIX_PROTOCOL_COLUMNS 24
 
 //
 // ------------------------------------------------------ Data Type Definitions

@@ -61,7 +61,8 @@ Environment:
 UCHAR
 LifepGetNeighborCount (
     UCHAR XPixel,
-    UCHAR YPixel
+    UCHAR YPixel,
+    PUSHORT NewPixelColor
     );
 
 //
@@ -95,12 +96,12 @@ Return Value:
 
 {
 
-    ULONG CurrentStall;
     UCHAR CursorMoved;
     UCHAR CursorX;
     UCHAR CursorY;
     ULONG GameTime;
     UCHAR Neighbors;
+    ULONG NextUpdateTime;
     APPLICATION NextApplication;
     USHORT OnPixel;
     ULONG UpdateInterval;
@@ -147,10 +148,13 @@ Return Value:
             // Stall for a bit. This is the meaning of life.
             //
 
-            CurrentStall = 0;
-            while (CurrentStall < UpdateInterval) {
+            NextUpdateTime = KeRawTime + UpdateInterval;
+            if (NextUpdateTime < KeRawTime) {
+                NextUpdateTime = 0xFFFFFFFFULL;
+            }
+
+            while (KeRawTime < NextUpdateTime) {
                 KeStall(32 * 10);
-                CurrentStall += 32 * 10;
 
                 //
                 // Process any inputs. The inputs are kind of fun. Trackball 1
@@ -237,7 +241,7 @@ Return Value:
             // Update total game time.
             //
 
-            GameTime += CurrentStall;
+            GameTime += UpdateInterval;
 
             //
             // Process the board to get the next generation of pixels.
@@ -245,7 +249,7 @@ Return Value:
 
             for (YPixel = 0; YPixel < MATRIX_HEIGHT; YPixel += 1) {
                 for (XPixel = 0; XPixel < MATRIX_WIDTH; XPixel += 1) {
-                    Neighbors = LifepGetNeighborCount(XPixel, YPixel);
+                    Neighbors = LifepGetNeighborCount(XPixel, YPixel, &OnPixel);
 
                     //
                     // Handle a pixel that was alive.
@@ -309,7 +313,8 @@ Return Value:
 UCHAR
 LifepGetNeighborCount (
     UCHAR XPixel,
-    UCHAR YPixel
+    UCHAR YPixel,
+    PUSHORT NewPixelColor
     )
 
 /*++
@@ -325,6 +330,8 @@ Arguments:
 
     YPixel - Supplies the zero-based Y coordinate of the pixel (top origin).
 
+    NewPixelColor - Supplies the average color of all the pixel's neighbors.
+
 Return Value:
 
     Returns the number of active cells bordering this cell.
@@ -333,26 +340,33 @@ Return Value:
 
 {
 
+    UCHAR BlueTotal;
     UCHAR CurrentX;
     UCHAR CurrentY;
+    UCHAR GreenTotal;
     UCHAR Neighbors;
-    CHAR XNeighbor;
-    CHAR YNeighbor;
+    USHORT Pixel;
+    UCHAR RedTotal;
+    UCHAR XNeighbor;
+    UCHAR YNeighbor;
 
+    RedTotal = 0;
+    GreenTotal = 0;
+    BlueTotal = 0;
     Neighbors = 0;
-    for (YNeighbor = -1; YNeighbor <= 1; YNeighbor += 1) {
-        for (XNeighbor = -1; XNeighbor <= 1; XNeighbor += 1) {
+    for (YNeighbor = 0; YNeighbor < 3; YNeighbor += 1) {
+        for (XNeighbor = 0; XNeighbor < 3; XNeighbor += 1) {
 
             //
             // Skip the cell itself.
             //
 
-            if ((XNeighbor == 0) && (YNeighbor == 0)) {
+            if ((XNeighbor == 1) && (YNeighbor == 1)) {
                 continue;
             }
 
-            CurrentX = XPixel + XNeighbor;
-            CurrentY = YPixel + YNeighbor;
+            CurrentX = XPixel + XNeighbor - 1;
+            CurrentY = YPixel + YNeighbor - 1;
 
             //
             // Handle wrapping.
@@ -374,10 +388,25 @@ Return Value:
                 CurrentY = 0;
             }
 
-            if ((KeMatrix[CurrentY][CurrentX] & PIXEL_USER_BIT) != 0) {
+            Pixel = KeMatrix[CurrentY][CurrentX];
+            if ((Pixel & PIXEL_USER_BIT) != 0) {
                 Neighbors += 1;
+                RedTotal += PIXEL_RED(Pixel);
+                GreenTotal += PIXEL_GREEN(Pixel);
+                BlueTotal += PIXEL_BLUE(Pixel);
             }
         }
+    }
+
+    //
+    // Determine the color of the new pixel, should it be turned on.
+    //
+
+    if (Neighbors != 0) {
+        *NewPixelColor = RGB_PIXEL((RedTotal / Neighbors),
+                                   (GreenTotal / Neighbors),
+                                   (BlueTotal / Neighbors));
+
     }
 
     return Neighbors;

@@ -141,6 +141,7 @@ Return Value:
     while (TRUE) {
         while (KeCurrentHalfSeconds == CurrentHalfSeconds) {
             NextApplication = KeRunMenu();
+            KeStallTenthSecond();
             if (NextApplication != ApplicationNone) {
                 return NextApplication;
             }
@@ -225,6 +226,7 @@ Return Value:
 
 {
 
+    UCHAR Character;
     UCHAR CharacterIndex;
     UCHAR Colon;
     USHORT Pixel;
@@ -246,10 +248,11 @@ Return Value:
     }
 
     for (CharacterIndex = 0; CharacterIndex < 3; CharacterIndex += 1) {
+        Character = RtlReadProgramSpace8(&(CkWeekday[Value][CharacterIndex]));
         HlPrintText(0,
                     1 + (3 * CharacterIndex),
                     1,
-                    CkWeekday[Value][CharacterIndex],
+                    Character,
                     Pixel);
     }
 
@@ -329,10 +332,11 @@ Return Value:
     HlPrintText(0, 7, 18, '0' + (Value % 10), Pixel);
     Value = KeCurrentMonth;
     for (CharacterIndex = 0; CharacterIndex < 3; CharacterIndex += 1) {
+        Character = RtlReadProgramSpace8(&(CkMonth[Value][CharacterIndex]));
         HlPrintText(0,
                     12 + (3 * CharacterIndex),
                     18,
-                    CkMonth[Value][CharacterIndex],
+                    Character,
                     Pixel);
     }
 

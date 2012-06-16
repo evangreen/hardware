@@ -128,9 +128,11 @@ Return Value:
     UCHAR LevelComplete;
     USHORT OldValue;
     APPLICATION NextApplication;
+    UCHAR NextNextX;
+    UCHAR NextNextY;
     USHORT NextSpace;
-    CHAR VectorX;
-    CHAR VectorY;
+    UCHAR NextX;
+    UCHAR NextY;
 
     //
     // Determine the current level.
@@ -191,40 +193,39 @@ Return Value:
             // See if the user is attempting to go somewhere.
             //
 
-            VectorX = 0;
-            VectorY = 0;
+            NextX = CharacterX;
+            NextNextX = CharacterX;
+            NextY = CharacterY;
+            NextNextY = CharacterY;
             if ((KeInputEdges & INPUT_LEFT2) != 0) {
                 KeInputEdges &= ~INPUT_LEFT2;
-                VectorX = -1;
-                VectorY = 0;
-            }
+                NextX -= 1;
+                NextNextX -= 2;
 
-            if ((KeInputEdges & INPUT_RIGHT2) != 0) {
+            } else if ((KeInputEdges & INPUT_RIGHT2) != 0) {
                 KeInputEdges &= ~INPUT_RIGHT2;
-                VectorX = 1;
-                VectorY = 0;
-            }
+                NextX += 1;
+                NextNextX += 2;
 
-            if ((KeInputEdges & INPUT_UP2) != 0) {
+            } else if ((KeInputEdges & INPUT_UP2) != 0) {
                 KeInputEdges &= ~INPUT_UP2;
-                VectorX = 0;
-                VectorY = -1;
-            }
+                NextY -= 1;
+                NextNextY -= 2;
 
-            if ((KeInputEdges & INPUT_DOWN2) != 0) {
+            } else if ((KeInputEdges & INPUT_DOWN2) != 0) {
                 KeInputEdges &= ~INPUT_DOWN2;
-                VectorX = 0;
-                VectorY = 1;
+                NextY += 1;
+                NextNextY += 2;
             }
 
             //
             // If that next space is a wall, that move won't be possible.
             //
 
-            NextSpace = KeMatrix[CharacterY + VectorY][CharacterX + VectorX];
+            NextSpace = KeMatrix[NextY][NextX];
             if (NextSpace == SOKOBAN_WALL) {
-                VectorX = 0;
-                VectorY = 0;
+                NextX = CharacterX;
+                NextY = CharacterY;
 
             //
             // If there's a bean where the user wants to go, check out what's
@@ -233,27 +234,21 @@ Return Value:
             //
 
             } else if ((NextSpace & SOKOBAN_BEAN) == SOKOBAN_BEAN) {
-                NextSpace = KeMatrix[CharacterY + (2 * VectorY)]
-                                    [CharacterX + (2 * VectorX)];
-
+                NextSpace = KeMatrix[NextNextY][NextNextX];
                 if ((NextSpace == SOKOBAN_WALL) ||
                     (NextSpace & SOKOBAN_BEAN) == SOKOBAN_BEAN) {
 
-                    VectorX = 0;
-                    VectorY = 0;
+                    NextX = CharacterX;
+                    NextY = CharacterY;
 
                 //
                 // Move our hero and the bean.
                 //
 
                 } else {
-                    KeMatrix[CharacterY + (2 * VectorY)]
-                            [CharacterX + (2 * VectorX)] |= SOKOBAN_BEAN;
-
-                    OldValue =
-                          KeMatrix[CharacterY + VectorY][CharacterX + VectorX];
-
-                    KeMatrix[CharacterY + VectorY][CharacterX + VectorX] =
+                    KeMatrix[NextNextY][NextNextX] |= SOKOBAN_BEAN;
+                    OldValue = KeMatrix[NextY][NextX];
+                    KeMatrix[NextY][NextX] =
                                     (OldValue & PIXEL_USER_BIT) | SOKOBAN_HERO;
                 }
 
@@ -262,9 +257,9 @@ Return Value:
             //
 
             } else {
-                OldValue = KeMatrix[CharacterY + VectorY][CharacterX + VectorX];
-                KeMatrix[CharacterY + VectorY][CharacterX + VectorX] =
-                                (OldValue & PIXEL_USER_BIT) | SOKOBAN_HERO;
+                OldValue = KeMatrix[NextY][NextX];
+                KeMatrix[NextY][NextX] = (OldValue & PIXEL_USER_BIT) |
+                                         SOKOBAN_HERO;
             }
 
             //
@@ -273,7 +268,7 @@ Return Value:
             // on it.
             //
 
-            if ((VectorX != 0) || (VectorY != 0)) {
+            if ((NextX != CharacterX) || (NextY != CharacterY)) {
                 if ((KeMatrix[CharacterY][CharacterX] & PIXEL_USER_BIT) != 0) {
                     KeMatrix[CharacterY][CharacterX] = SOKOBAN_GOAL |
                                                        PIXEL_USER_BIT;
@@ -282,8 +277,8 @@ Return Value:
                     KeMatrix[CharacterY][CharacterX] = SOKOBAN_FREE;
                 }
 
-                CharacterY += VectorY;
-                CharacterX += VectorX;
+                CharacterY = NextY;
+                CharacterX = NextX;
             }
 
             //
@@ -381,7 +376,7 @@ Return Value:
             // Slow down to debounce.
             //
 
-            KeStallTenthSecond();
+            KeStall(32 * 50);
         }
     }
 
@@ -489,13 +484,14 @@ Return Value:
     UCHAR Byte;
     UCHAR ByteIndex;
     UCHAR PixelIndex;
+    USHORT StartingPosition;
     UCHAR XPixel;
     UCHAR YPixel;
 
     XPixel = SOKOBAN_LEVEL_X;
     YPixel = SOKOBAN_LEVEL_Y;
     for (ByteIndex = 0; ByteIndex < SOKOBAN_LEVEL_SIZE; ByteIndex += 1) {
-        Byte = SokobanData[Level][ByteIndex];
+        Byte = RtlReadProgramSpace8(&(SokobanData[Level][ByteIndex]));
         for (PixelIndex = 0; PixelIndex < 4; PixelIndex += 1) {
             switch ((Byte >> (2 * PixelIndex)) & 0x3) {
             case SOKOBAN_CELL_FREE:
@@ -523,10 +519,9 @@ Return Value:
         }
     }
 
-    *CharacterX = (SokobanStartingPosition[Level] & SOKOBAN_ORIGIN_MASK) +
-                  SOKOBAN_LEVEL_X;
-
-    *CharacterY = ((SokobanStartingPosition[Level] >> SOKOBAN_ORIGIN_Y_SHIFT) &
+    StartingPosition = RtlReadProgramSpace16(&(SokobanStartingPosition[Level]));
+    *CharacterX = (StartingPosition & SOKOBAN_ORIGIN_MASK) + SOKOBAN_LEVEL_X;
+    *CharacterY = ((StartingPosition >> SOKOBAN_ORIGIN_Y_SHIFT) &
                    SOKOBAN_ORIGIN_MASK) + SOKOBAN_LEVEL_Y;
 
     //

@@ -30,6 +30,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <assert.h>
 
 #include "types.h"
 #include "mainboard.h"
@@ -218,12 +219,14 @@ MMRESULT HlTimer = 0;
 HWND HlWindow;
 
 //
-// Store resources used for updating the LCD.
+// Store resources used for updating the LCD. Use an extra character so the
+// string is always null terminated.
 //
 
 HFONT HlLcdFont;
-PSTR HlLcdLine1 = "";
-PSTR HlLcdLine2 = "";
+CHAR HlLcdLine1[LCD_LINE_LENGTH + 1];
+CHAR HlLcdLine2[LCD_LINE_LENGTH + 1];
+CHAR HlLcdCurrentAddress = 0;
 
 //
 // Maintain a shadow copy of the current state of the screen.
@@ -369,24 +372,19 @@ InitializeEnd:
 }
 
 VOID
-HlSetLcdText (
-    PPGM Line1,
-    PPGM Line2
+HlClearLcdScreen (
+    VOID
     )
 
 /*++
 
 Routine Description:
 
-    This routine sets the text on the 16x2 LCD.
+    This routine clears the LCD screen.
 
 Arguments:
 
-    Line1 - Supplies a pointer to a NULL-terminated string containing the first
-        line of text.
-
-    Line2 - Supplies a pointer to a NULL-terminated string containing the
-        second line of text.
+    None.
 
 Return Value:
 
@@ -396,8 +394,115 @@ Return Value:
 
 {
 
-    HlLcdLine1 = (PSTR)Line1;
-    HlLcdLine2 = (PSTR)Line2;
+    memset(HlLcdLine1, ' ', sizeof(HlLcdLine1) - 1);
+    memset(HlLcdLine2, ' ', sizeof(HlLcdLine2) - 1);
+    HlLcdLine1[LCD_LINE_LENGTH] = '\0';
+    HlLcdLine2[LCD_LINE_LENGTH] = '\0';
+    InvalidateRect(HlWindow, NULL, TRUE);
+    UpdateWindow(HlWindow);
+    return;
+}
+
+VOID
+HlSetLcdAddress (
+    UCHAR Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the address of the next character to be written to the
+    LCD screen.
+
+Arguments:
+
+    Address - Supplies the address to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    HlLcdCurrentAddress = Address;
+}
+
+VOID
+HlLcdPrintStringFromFlash (
+    PPGM String
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a string at the current LCD address. Wrapping to the
+    next line is not accounted for.
+
+Arguments:
+
+    String - Supplies a pointer to an address in code space of the string to
+        print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    HlLcdPrintString((PUCHAR)String);
+    return;
+}
+
+VOID
+HlLcdPrintString (
+    PCHAR String
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a string at the current LCD address. Wrapping to the
+    next line is not accounted for.
+
+Arguments:
+
+    String - Supplies a pointer to an address in data space of the string to
+        print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PUCHAR Address;
+    UCHAR Length;
+    UCHAR Offset;
+
+    Address = (PUCHAR)&HlLcdLine1;
+    if (HlLcdCurrentAddress >= LCD_SECOND_LINE) {
+        Address = HlLcdLine2;
+    }
+
+    Offset = HlLcdCurrentAddress & LCD_LINE_OFFSET_MASK;
+    Length = strlen(String);
+    if (Offset + Length > LCD_LINE_LENGTH) {
+
+        assert(FALSE);
+
+        Length = LCD_LINE_LENGTH - Offset;
+    }
+
+    memcpy(Address + Offset, String, Length);
     InvalidateRect(HlWindow, NULL, TRUE);
     UpdateWindow(HlWindow);
     return;
@@ -650,6 +755,41 @@ Return Value:
     }
 
     HlNewTextPrinted = TRUE;
+    return;
+}
+
+VOID
+HlUpdateDisplay (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allows the hardware layer to update the matrix display.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Refresh the screen if needed.
+    //
+
+    if (HlpIsMatrixStale() != FALSE) {
+        InvalidateRect(HlWindow, NULL, FALSE);
+        UpdateWindow(HlWindow);
+    }
+
     return;
 }
 
@@ -926,7 +1066,6 @@ Return Value:
     // Update system time.
     //
 
-
     TimeDifference = (ULONG)(CurrentTime - HlLastTime);
     KeUpdateTime((USHORT)TimeDifference);
     HlLastTime = CurrentTime;
@@ -938,16 +1077,6 @@ Return Value:
     KeRawInputs = HlRawInputs;
     KeInputEdges |= HlInputEdges;
     HlInputEdges = 0;
-
-    //
-    // Refresh the screen.
-    //
-
-    if (HlpIsMatrixStale() != FALSE) {
-        InvalidateRect(HlWindow, NULL, FALSE);
-        UpdateWindow(HlWindow);
-    }
-
     return;
 }
 
@@ -1374,7 +1503,6 @@ Return Value:
         }
     }
 
-    HlSetLcdText("LCD Reset", "0123456789ABCDEF");
     Result = TRUE;
 
 InitializeLcdEnd:

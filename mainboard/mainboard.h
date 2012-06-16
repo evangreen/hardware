@@ -41,24 +41,41 @@ Author:
 #define STANDBY_WHITE_MASK PIXEL_GREEN_MASK
 
 #define MAX_INTENSITY 31
+
+//
+// Define the two LCD lines.
+//
+
+#define LCD_FIRST_LINE 0x00
+#define LCD_SECOND_LINE 0x40
+#define LCD_LINE_OFFSET_MASK 0x3F
 #define LCD_LINE_LENGTH 16
 
 //
 // Define the input bits.
 //
 
-#define INPUT_LEFT1   0x0001
-#define INPUT_RIGHT1  0x0002
-#define INPUT_UP1     0x0004
-#define INPUT_DOWN1   0x0008
-#define INPUT_LEFT2   0x0010
-#define INPUT_RIGHT2  0x0020
-#define INPUT_UP2     0x0040
-#define INPUT_DOWN2   0x0080
-#define INPUT_BUTTON1 0x0100
-#define INPUT_BUTTON2 0x0200
-#define INPUT_MENU    0x0400
-#define INPUT_STANDBY 0x0800
+#define INPUT_UP2     0x0001
+#define INPUT_DOWN2   0x0002
+#define INPUT_LEFT2   0x0004
+#define INPUT_RIGHT2  0x0008
+#define INPUT_BUTTON2 0x0010
+#define INPUT_UP1     0x0100
+#define INPUT_DOWN1   0x0200
+#define INPUT_LEFT1   0x0400
+#define INPUT_RIGHT1  0x0800
+#define INPUT_BUTTON1 0x1000
+#define INPUT_MENU    0x2000
+#define INPUT_STANDBY 0x4000
+
+//
+// Define the analog inputs.
+//
+
+#define ANALOG_INPUT_EXTERNAL_TEMPERATURE 5
+#define ANALOG_INPUT_AUDIO 6
+#define ANALOG_INPUT_ALCOHOL 7
+#define ANALOG_INPUT_INTERNAL_TEMPERATURE 8
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -160,6 +177,7 @@ extern volatile USHORT KeInputEdges;
 // Define the current time variables.
 //
 
+extern volatile ULONG KeRawTime;
 extern volatile USHORT KeCurrentTime;
 extern volatile UCHAR KeCurrentHalfSeconds;
 extern volatile UCHAR KeCurrentMinutes;
@@ -334,32 +352,6 @@ Return Value:
 
 --*/
 
-VOID
-HlSetLcdText (
-    PPGM Line1,
-    PPGM Line2
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets the text on the 16x2 LCD.
-
-Arguments:
-
-    Line1 - Supplies a pointer to a NULL-terminated string containing the first
-        line of text.
-
-    Line2 - Supplies a pointer to a NULL-terminated string containing the
-        second line of text.
-
-Return Value:
-
-    None.
-
---*/
-
 USHORT
 HlRandom (
     VOID
@@ -431,6 +423,138 @@ HlClearScreen (
 Routine Description:
 
     This routine clears the entire screen, turning off all LEDs.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlClearLcdScreen (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine clears the LCD screen.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlSetLcdAddress (
+    UCHAR Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the address of the next character to be written to the
+    LCD screen.
+
+Arguments:
+
+    Address - Supplies the address to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlLcdPrintStringFromFlash (
+    PPGM String
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a string at the current LCD address. Wrapping to the
+    next line is not accounted for.
+
+Arguments:
+
+    String - Supplies a pointer to an address in code space of the string to
+        print.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlLcdPrintString (
+    PCHAR String
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a string at the current LCD address. Wrapping to the
+    next line is not accounted for.
+
+Arguments:
+
+    String - Supplies a pointer to an address in data space of the string to
+        print.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlLcdPrintHexInteger (
+    ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a hexadecimal integer at the current LCD location. Line
+    wrapping is not handled.
+
+Arguments:
+
+    Value - Supplies the value to write. Leading zeroes are stripped.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlUpdateDisplay (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allows the hardware layer to update the matrix display.
 
 Arguments:
 
