@@ -1,0 +1,2 @@
+1. To remove all but top and bottom layers, go to Edit>Design Rules>Layers, and remove 
+parentheses around Setup: (1*16)
