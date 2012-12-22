@@ -1,0 +1,26 @@
+Airlight Master board
+1,LM317M Adj Reg, 0.91,http://www.digikey.com/product-detail/en/LM317MBSTT3G/LM317MBSTT3GOSCT-ND/1967052
+1,240 Ohm Resistor,0402,0.013,http://www.digikey.com/product-detail/en/ERJ-2GEJ241X/P240JCT-ND/146941
+2,390 Ohm Resistor,0402,0.013,http://www.digikey.com/product-detail/en/ERJ-2GEJ391X/P390JCT-ND/146991
+1,FT32RQ,32QFN,4.5,http://www.digikey.com/product-detail/en/FT232RQ-REEL/768-1008-1-ND/1836403
+1,16MHz Crystal,HC49US,0.35,http://www.digikey.com/product-detail/en/ATS16B/CTX1085-ND/2640031
+2,18pF Cap,0402,0.0114,http://www.digikey.com/product-detail/en/GRM1555C1H180JZ01D/490-1281-1-ND/587887
+1,10uF Ceramic Capacitor 10V,0805,0.32,http://search.digikey.com/us/en/products/C2012Y5V1A106Z/445-1371-1-ND/567608
+7,0.1uF Ceramic Capacitor 10V,0402,0.04,http://search.digikey.com/us/en/products/LMK105BJ104KV-F/587-1227-1-ND/931004
+1,USB Mini-B SMD Connector,1.51,http://www.digikey.com/product-detail/en/1734035-2/A31727CT-ND/773789
+2,74HC597 Shift register,16SOIC,0.65,http://www.digikey.com/product-detail/en/74HC597D,653/568-8161-1-ND/2762851
+2,MM74HC589 Shift Register,16SOIC,0.46,http://www.digikey.com/product-detail/en/MC74HC589ADG/MC74HC589ADGOS-ND/1480105
+1,RFM22B-S2 Wireless Transceiver,N/A,11.95,https://www.sparkfun.com/products/10153?
+1,10k Ohm Resistor net,4x0402,0.15,http://www.digikey.com/product-detail/en/EXB-N8V103JX/Y10103CT-ND/671669
+1,20k Ohm Resistor net,4x0402,0.15,http://www.digikey.com/product-detail/en/EXB-N8V203JX/Y10203CT-ND/671712
+2,100k Ohm Resistor net,4x0402,0.15,http://www.digikey.com/product-detail/en/EXB-N8V104JX/Y10104CT-ND/671670
+4,150 Ohm Resistor net,4x0402,0.15,http://www.digikey.com/product-detail/en/EXB-N8V151JX/Y10151CT-ND/671688
+2,10uF Ceramic Capacitor 10V,0805,0.32,http://search.digikey.com/us/en/products/C2012Y5V1A106Z/445-1371-1-ND/567608
+1,10kOhm resistor,0402,0.05,http://search.digikey.com/us/en/products/ERJ-2GEJ103X/P10KJCT-ND/146734
+2,BSS138W N-Channel MOSFET 50V 200mA,SOT-323,0.45,http://www.digikey.com/product-detail/en/BSS138W-7-F/BSS138W-FDICT-ND/815379
+1,USB Mini-B SMD Connector,1.51,http://www.digikey.com/product-detail/en/1734035-2/A31727CT-ND/773789
+
+1,pack of 4 screws, 1/4" 4-40,1.50,http://www.sparkfun.com/products/10453
+1,pack of 4 bumpers,N/A,0.50,http://www.sparkfun.com/products/10230
+1,pack of 4 nuts,4-40,1.50,http://www.sparkfun.com/products/10454
+1,pack of 8 standoffs,3/8" 4-40,3.95,http://www.sparkfun.com/products/10463
