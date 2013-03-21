@@ -22,7 +22,8 @@
 
 BINARY := pcdash
 
-OBJS := pcdash.o
+OBJS := pcdash.o \
+        winsup.o \
 
 #
 # Set up the OS variable.
@@ -96,7 +97,7 @@ all: $(OBJROOT) $(BINROOT) $(BINARY)
 $(BINARY): $(OBJS) $(TARGETLIBS)
 	@echo Linking - $@
 ifeq (Windows_NT, $(OS))
-	@cd $(OBJROOT) && $(CC) -o $@ $^
+	@cd $(OBJROOT) && $(CC) -o $@ $^ -liphlpapi
 	@echo Binplacing - $(OBJROOT)\$(BINARY)
 	@xcopy /Y /I /Q $(OBJROOT)\$(BINARY) $(BINROOT)\ > nul
 else

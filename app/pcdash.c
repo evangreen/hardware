@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module implements a program to control the dashboard from the PC
+    This module implements a program to control the dashboard from the PC.
 
 Author:
 
@@ -27,6 +27,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ossup.h"
 
 #include <windows.h>
 
@@ -41,6 +42,29 @@ Environment:
 #define DASHBOARD_BUFFER_SIZE 256
 #define USAGE_STRING                                                           \
     "Usage: pcdash [-s SerialPortName]\n\n"                                    \
+
+#define TEMP_MIN 11
+#define TEMP_MAX 35
+#define TEMP_TOTAL_TIME 50
+#define FUEL_MIN 20
+#define FUEL_MAX 51
+#define FUEL_TOTAL_TIME 50
+
+#define WPM_THIS_PERIOD_WEIGHT 1
+#define WPM_LAST_PERIOD_WEIGHT 200
+#define WPM_DENOMINATOR (WPM_THIS_PERIOD_WEIGHT + WPM_LAST_PERIOD_WEIGHT)
+
+#define PROCESSOR_USAGE_THIS_PERIOD_WEIGHT 1
+#define PROCESSOR_USAGE_LAST_PERIOD_WEIGHT 1
+#define PROCESSOR_USAGE_DENOMINATOR \
+    (PROCESSOR_USAGE_THIS_PERIOD_WEIGHT + PROCESSOR_USAGE_LAST_PERIOD_WEIGHT)
+
+#define FUEL_TANK_MINUTES 120
+#define REFUEL_FACTOR 6
+
+#define DOWNLOAD_SPEED_THRESHOLD 300
+#define UPLOAD_SPEED_THRESHOLD 100
+
 
 //
 // Define dashboard lights.
@@ -92,16 +116,21 @@ typedef struct _APP_CONTEXT {
 typedef struct _DASHBOARD_CONFIGURATION {
     USHORT Magic;
     USHORT Lights;
-    USHORT FuelOnMs;
-    USHORT FuelTotalMs;
-    USHORT TempOnMs;
-    USHORT TempTotalMs;
+    USHORT FuelOn;
+    USHORT FuelTotal;
+    USHORT TempOn;
+    USHORT TempTotal;
     USHORT TachRpm;
 } PACKED DASHBOARD_CONFIGURATION, *PDASHBOARD_CONFIGURATION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+int
+RunDebugMode (
+    PAPP_CONTEXT AppContext
+    );
 
 PSTR
 GetLastSerialPort (
@@ -144,6 +173,21 @@ VOID
 PrintLastError (
     );
 
+void
+MillisecondSleep (
+    unsigned int Milliseconds
+    );
+
+USHORT
+ComputeTemperatureValue (
+    int Percent
+    );
+
+USHORT
+ComputeFuelValue (
+    int Percent
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -181,12 +225,28 @@ Return Value:
 {
 
     APP_CONTEXT AppContext;
+    BOOL ActivityThisMinute;
     PSTR ArgumentSwitch;
-    //ULONG ByteCount;
+    ULONG ContinuousActivityTicks;
     PDASHBOARD_CONFIGURATION Dashboard;
+    BOOL DebugMode;
+    int DownloadSpeed;
+    int FuelPercent;
+    int Hour;
+    ULONG LastMinuteTicks;
+    int LoopCount;
+    int MemoryUsage;
+    int MinutesWithoutActivity;
+    int PressesThisTime;
+    ULONGLONG PreviousTickCount;
+    int ProcessorUsage;
+    int ProcessorUsageThisTime;
     BOOL Result;
+    ULONGLONG TickCount;
     ULONG TotalBytesReceived;
-    INT UserInput;
+    int UploadSpeed;
+    int WordsPerMinute;
+    int WordsPerMinuteThisPeriod;
 
     TotalBytesReceived = 0;
     memset(&AppContext, 0, sizeof(APP_CONTEXT));
@@ -198,19 +258,25 @@ Return Value:
         goto mainEnd;
     }
 
+    if (InitializeOsDependentSupport() == 0) {
+        printf("Error: Failed to initialize OS support.\n");
+        goto mainEnd;
+    }
+
     memset(Dashboard, 0, sizeof(DASHBOARD_CONFIGURATION));   
     Dashboard->Magic = DASHBOARD_MAGIC;
-    Dashboard->Lights = 1;
-    Dashboard->FuelOnMs = 10;
-    Dashboard->FuelTotalMs = 20;
-    Dashboard->TempOnMs = 7;
-    Dashboard->TempTotalMs = 20;
-    Dashboard->TachRpm = 6000;
+    Dashboard->Lights = 0;
+    Dashboard->FuelOn = FUEL_TOTAL_TIME;
+    Dashboard->FuelTotal = 50;
+    Dashboard->TempOn = 19;
+    Dashboard->TempTotal = TEMP_TOTAL_TIME;
+    Dashboard->TachRpm = 4500;
 
     //
     // Process the command line options.
     //
 
+    DebugMode = FALSE;
     while ((argc > 1) && (argv[1][0] == '-')) {
         ArgumentSwitch = &(argv[1][1]);
 
@@ -228,6 +294,10 @@ Return Value:
             argc -= 1;
             argv += 1;
 
+        } else if (strcmp(ArgumentSwitch, "d") == 0) {
+            printf("Debug mode!\n");
+            DebugMode = TRUE;
+
         } else if ((strcmp(ArgumentSwitch, "h") == 0) ||
                    (strcmp(ArgumentSwitch, "-help") == 0)) {
 
@@ -236,7 +306,7 @@ Return Value:
         }
 
         argc -= 1;
-        argc += 1;
+        argv += 1;
     }
 
     //
@@ -265,8 +335,343 @@ Return Value:
         goto mainEnd;
     }
 
+    if (DebugMode != FALSE) {
+        RunDebugMode(&AppContext);
+        goto mainEnd;
+    }
+
+    //
+    // This is the main run loop.
+    //
+
+    MinutesWithoutActivity = 0;
+    ContinuousActivityTicks = FUEL_TANK_MINUTES * 60 * 1000 / 2;
+    ActivityThisMinute = FALSE;
+    ProcessorUsage = 0;
+    LoopCount = 149;
+    WordsPerMinute = 0;
+    PreviousTickCount = GetTickCount() - 1;
+    LastMinuteTicks = PreviousTickCount;
+    while (TRUE) {        
+
+        //
+        // Calculate the typing rate in words per minute. A word is 
+        // considered 5 characters. Forget that, make the needle fun.
+        //
+
+        PressesThisTime = KeyPresses;
+        KeyPresses = 0;        
+        TickCount = GetTickCount();
+        if (TickCount < PreviousTickCount) {
+            PreviousTickCount = TickCount;
+        }
+
+        if ((ActivityThisMinute == FALSE) && (PressesThisTime != 0)) {
+            ActivityThisMinute = TRUE;
+        }
+
+        if (TickCount - PreviousTickCount != 0) {
+            if (BackspacePresses != 0) {
+                PressesThisTime -= 1;
+            }
+
+            WordsPerMinuteThisPeriod =  (PressesThisTime * 60000) / 
+                                        (int)(TickCount - PreviousTickCount);
+            
+            //
+            // This is the fun factor.
+            //
+
+            WordsPerMinuteThisPeriod *= 3;
+            WordsPerMinute = ((WordsPerMinuteThisPeriod * 
+                               WPM_THIS_PERIOD_WEIGHT) + 
+                              (WordsPerMinute * WPM_LAST_PERIOD_WEIGHT)) /
+                             WPM_DENOMINATOR;
+
+            if (WordsPerMinute < 0) {
+                WordsPerMinute = 0;
+            }
+
+            if (WordsPerMinute >= 30) {
+                Dashboard->TachRpm = WordsPerMinute * 10;
+
+            } else {
+                Dashboard->TachRpm = 0;
+            }
+
+            if (WordsPerMinute >= 200) {
+                Dashboard->Lights |= DASHBOARD_SEATBELTS;
+                if (WordsPerMinute >= 300) {
+                    Dashboard->Lights |= DASHBOARD_ANTI_LOCK;
+                }
+
+            } else {
+                Dashboard->Lights &= ~DASHBOARD_SEATBELTS;
+                Dashboard->Lights &= ~DASHBOARD_ANTI_LOCK;
+            }
+        }
+
+        //
+        // Get the time of day every minute or so.
+        //
+
+        LoopCount += 1;
+        if (LoopCount >= 150) {
+            LoopCount = 0;
+            GetCurrentDateAndTime(NULL, NULL, NULL, &Hour, NULL, NULL, NULL);
+
+            //
+            // Between 6pm and midnight, turn on the illumination. Between 
+            // midnight and 9AM, turn on the illumination if there's any
+            // activity. After 11PM, turn on the bright beams if there's
+            // any activity.
+            //
+
+            if (Hour < 9) {
+                if (ActivityThisMinute != FALSE) {
+                    Dashboard->Lights |= DASHBOARD_ILLUMINATION;
+
+                } else {
+                    Dashboard->Lights &= ~DASHBOARD_ILLUMINATION;
+                }
+
+            } else if (Hour >= 12 + 6) {
+                Dashboard->Lights |= DASHBOARD_ILLUMINATION;
+
+            } else {
+                Dashboard->Lights &= ~DASHBOARD_ILLUMINATION;
+            }      
+
+            if ((Hour >= 12 + 11) || 
+                ((Hour < 9) && (ActivityThisMinute != FALSE))) {
+
+                Dashboard->Lights |= DASHBOARD_HIGH_BEAM;
+
+            } else {
+                Dashboard->Lights &= ~DASHBOARD_HIGH_BEAM;
+            }
+
+            //
+            // If there's been activity, add it to the continuous activity 
+            // timer. Idle activity subtracts at 6 times the speed, but only 
+            // after 5 minutes with no activity. 
+            //
+
+            Dashboard->Lights &= ~DASHBOARD_HOLD;
+            Dashboard->Lights &= ~DASHBOARD_POWER;            
+            if ((ActivityThisMinute != FALSE) || (MinutesWithoutActivity < 5)) {
+                ContinuousActivityTicks += TickCount - LastMinuteTicks;                
+                if (ActivityThisMinute != FALSE) {
+                    Dashboard->Lights |= DASHBOARD_POWER;                    
+                    MinutesWithoutActivity = 0;
+
+                } else {
+                    MinutesWithoutActivity += 1;
+                    Dashboard->Lights |= DASHBOARD_HOLD;
+                }
+
+            //
+            // This really is a period of idle activity.
+            //
+
+            } else {                
+                if ((TickCount - LastMinuteTicks) * REFUEL_FACTOR > 
+                    ContinuousActivityTicks) {
+
+                    ContinuousActivityTicks = 0;
+
+                } else {
+                    ContinuousActivityTicks -= 
+                             (TickCount - LastMinuteTicks) * REFUEL_FACTOR;
+                }
+            }
+
+            //
+            // Adjust the fuel gauge and a few lights based on a timer.
+            //
+
+            FuelPercent = 100 - ((ContinuousActivityTicks * 100) / 
+                                 (FUEL_TANK_MINUTES * 60 * 1000));
+
+            Dashboard->FuelOn = ComputeFuelValue(FuelPercent);
+            if (FuelPercent < 50) {
+                Dashboard->Lights |= DASHBOARD_CHARGE;
+
+            } else {
+                Dashboard->Lights &= ~DASHBOARD_CHARGE;
+            }
+
+            if (FuelPercent < 10) {
+                Dashboard->Lights |= DASHBOARD_FUEL;
+
+            } else {
+                Dashboard->Lights &= ~DASHBOARD_FUEL;
+            }
+
+            ActivityThisMinute = FALSE;
+            LastMinuteTicks = TickCount;
+        }
+
+        //
+        // Check on the network every other time or so.
+        //
+
+        if ((LoopCount & 0x1) == 0) {
+            GetNetworkUsage(&DownloadSpeed, &UploadSpeed);
+            if (DownloadSpeed > DOWNLOAD_SPEED_THRESHOLD) {
+                Dashboard->Lights |= DASHBOARD_DOOR;
+
+            } else {
+                Dashboard->Lights &= ~DASHBOARD_DOOR;
+            }
+
+            if (UploadSpeed > UPLOAD_SPEED_THRESHOLD) {
+                Dashboard->Lights |= DASHBOARD_LEVELER;
+
+            } else {
+                Dashboard->Lights &= ~DASHBOARD_LEVELER;
+            }
+        }
+
+        GetProcessorAndMemoryUsage(&ProcessorUsageThisTime, 
+                                   &MemoryUsage);
+
+        ProcessorUsage = ((ProcessorUsageThisTime * 
+                           PROCESSOR_USAGE_THIS_PERIOD_WEIGHT) +
+                          (ProcessorUsage * 
+                           PROCESSOR_USAGE_LAST_PERIOD_WEIGHT)) / 
+                         PROCESSOR_USAGE_DENOMINATOR;
+
+        Dashboard->TempOn = ComputeTemperatureValue(ProcessorUsage / 10);
+        if (ProcessorUsage >= 50 * 10) {
+            Dashboard->Lights |= DASHBOARD_OIL;
+
+        } else {
+            Dashboard->Lights &= ~DASHBOARD_OIL;
+        }
+
+        if (ProcessorUsage >= 75 * 10) {
+            Dashboard->Lights |= DASHBOARD_CHECK_ENGINE;
+
+        } else {
+            Dashboard->Lights &= ~DASHBOARD_CHECK_ENGINE;
+        }
+
+        if (BackspacePresses != 0) {
+            Dashboard->Lights |= DASHBOARD_BRAKE;
+            BackspacePresses -= 1;
+
+        } else {
+            Dashboard->Lights &= ~DASHBOARD_BRAKE;
+        }
+
+        if ((Dashboard->Lights & DASHBOARD_TURN_LEFT) != 0) {
+            Dashboard->Lights &= ~DASHBOARD_TURN_LEFT;
+
+        } else {
+            if (LeftControlKeyPresses != 0) {
+                Dashboard->Lights |= DASHBOARD_TURN_LEFT;
+                LeftControlKeyPresses -= 1;
+            }
+        }
+
+        if ((Dashboard->Lights & DASHBOARD_TURN_RIGHT) != 0) {
+            Dashboard->Lights &= ~DASHBOARD_TURN_RIGHT;
+
+        } else {
+            if (RightControlKeyPresses != 0) {
+                Dashboard->Lights |= DASHBOARD_TURN_RIGHT;
+                RightControlKeyPresses -= 1;
+            } 
+        }
+
+        Result = SerialSend(&AppContext, 
+                            Dashboard, 
+                            sizeof(DASHBOARD_CONFIGURATION));
+
+        if (Result == FALSE) {
+            printf("Error: Failed to send configuraiton. Please try "
+                   "again.\n");
+        }
+
+        MillisecondSleep(400);
+        PreviousTickCount = TickCount;
+    }
+
+mainEnd:
+    DestroyCommunications(&AppContext);
+    if (Dashboard != NULL) {
+        free(Dashboard);
+    }
+
+    DestroyOsDependentSupport();
+    return 0;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+int
+RunDebugMode (
+    PAPP_CONTEXT AppContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs the app in debug mode, which allows the user to 
+    interactively control the dashboard manually.
+
+Arguments:
+
+    AppContext - Supplies a pointer to the initialized applicaton context.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/
+
+{
+
+    //ULONG ByteCount;
+    PDASHBOARD_CONFIGURATION Dashboard;
+    BOOL Result;
+    ULONG TotalBytesReceived;
+    INT UserInput;
+
+    TotalBytesReceived = 0;
+    printf("PC Dashboard, Version 1.00\n");
+    Dashboard = malloc(DASHBOARD_BUFFER_SIZE);
+    if (Dashboard == NULL) {
+        printf("Error: Failed to malloc buffer.\n");
+        goto RunDebugModeEnd;
+    }
+
+    printf("Debug mode. Keys are the following:\n"
+           "a - Increase Tach\nz - Decrease Tach\n"
+           "w - Increase fuel on count.\n"
+           "s - Decrease fuel on count.\n"
+           "e - Increase fuel total cycle count.\n"
+           "d - Decrease fuel total cycle count.\n"
+           "r - Increase temp on count.\n"
+           "f - Decrease temp on count.\n"
+           "t - Increase temp total cycle count.\n"
+           "g - Decrease temp total cycle count.\n"
+           "1 - Cycle through lights.\n"
+           "q - Quit.\n");
+
+    memset(Dashboard, 0, sizeof(DASHBOARD_CONFIGURATION));   
+    Dashboard->Magic = DASHBOARD_MAGIC;
+    Dashboard->Lights = 1;
+    Dashboard->FuelOn = 10;
+    Dashboard->FuelTotal = 20;
+    Dashboard->TempOn = 7;
+    Dashboard->TempTotal = 20;
+    Dashboard->TachRpm = 6000;
     SetRawConsoleMode();
-    printf("Press 1 to test, or q to quit\n");
     while (TRUE) {
         UserInput = getc(stdin);
         if (UserInput == -1) {
@@ -307,50 +712,66 @@ Return Value:
         }
 
         if (UserInput == 'w') {
-            Dashboard->FuelOnMs += 1;
-            printf("Increasing Fuel On to %d/%d\n", Dashboard->FuelOnMs, Dashboard->FuelTotalMs);
+            Dashboard->FuelOn += 1;
+            printf("Increasing Fuel On to %d/%d\n", 
+                   Dashboard->FuelOn, 
+                   Dashboard->FuelTotal);
         }
 
         if (UserInput == 's') {
-            Dashboard->FuelOnMs -= 1;
-            printf("Decreasing Fuel On to %d/%d\n", Dashboard->FuelOnMs, Dashboard->FuelTotalMs);
+            Dashboard->FuelOn -= 1;
+            printf("Decreasing Fuel On to %d/%d\n", 
+                   Dashboard->FuelOn, 
+                   Dashboard->FuelTotal);
         }
         
         if (UserInput == 'e') {
-            Dashboard->FuelTotalMs += 1;
-            printf("Increasing Fuel Total to %d/%d\n", Dashboard->FuelOnMs, Dashboard->FuelTotalMs);
+            Dashboard->FuelTotal += 1;
+            printf("Increasing Fuel Total to %d/%d\n", 
+                   Dashboard->FuelOn, 
+                   Dashboard->FuelTotal);
         }
 
         if (UserInput == 'd') {
-            Dashboard->FuelTotalMs -= 1;
-            printf("Decreasing Fuel Total to %d/%d\n", Dashboard->FuelOnMs, Dashboard->FuelTotalMs);
+            Dashboard->FuelTotal -= 1;
+            printf("Decreasing Fuel Total to %d/%d\n", 
+                   Dashboard->FuelOn, 
+                   Dashboard->FuelTotal);
         }
 
         if (UserInput == 'r') {
-            Dashboard->TempOnMs += 1;
-            printf("Increasing Temp On to %d/%d\n", Dashboard->TempOnMs, Dashboard->TempTotalMs);
+            Dashboard->TempOn += 1;
+            printf("Increasing Temp On to %d/%d\n", 
+                   Dashboard->TempOn, 
+                   Dashboard->TempTotal);
         }
 
         if (UserInput == 'f') {
-            Dashboard->TempOnMs -= 1;
-            printf("Decreasing Temp On to %d/%d\n", Dashboard->TempOnMs, Dashboard->TempTotalMs);
+            Dashboard->TempOn -= 1;
+            printf("Decreasing Temp On to %d/%d\n", 
+                   Dashboard->TempOn, 
+                   Dashboard->TempTotal);
         }
         
         if (UserInput == 't') {
-            Dashboard->TempTotalMs += 1;
-            printf("Increasing Temp Total to %d/%d\n", Dashboard->TempOnMs, Dashboard->TempTotalMs);
+            Dashboard->TempTotal += 1;
+            printf("Increasing Temp Total to %d/%d\n", 
+                   Dashboard->TempOn, 
+                   Dashboard->TempTotal);
         }
 
         if (UserInput == 'g') {
-            Dashboard->TempTotalMs -= 1;
-            printf("Decreasing Temp Total to %d/%d\n", Dashboard->TempOnMs, Dashboard->TempTotalMs);
+            Dashboard->TempTotal -= 1;
+            printf("Decreasing Temp Total to %d/%d\n", 
+                   Dashboard->TempOn, 
+                   Dashboard->TempTotal);
         }
 
         //
         // Send the new dashboard configuration.
         //
 
-        Result = SerialSend(&AppContext, 
+        Result = SerialSend(AppContext, 
                             Dashboard, 
                             sizeof(DASHBOARD_CONFIGURATION));
 
@@ -382,21 +803,15 @@ Return Value:
             PrintLastError();
             printf("\nPlease try again.\n");
         }*/
-
-        //DestroyCommunications(&AppContext);
     }
 
-mainEnd:
+RunDebugModeEnd:
     if (Dashboard != NULL) {
         free(Dashboard);
     }
 
     return 0;
 }
-
-//
-// --------------------------------------------------------- Internal Functions
-//
 
 PSTR
 GetLastSerialPort (
@@ -968,4 +1383,105 @@ Return Value:
 
     printf("Last Error: %s\n", MessageBuffer);
     return;
+}
+
+void
+MillisecondSleep (
+    unsigned int Milliseconds
+    )
+
+/*++
+
+Routine Description:
+
+    This routine suspends the current thread's execution for at least the
+    specified number of milliseconds.
+
+Arguments:
+
+    Milliseconds - Supplies the number of milliseconds to suspend the thread
+        for.
+
+Return Value:
+
+    None. The function will simply return after approximately the specified
+    number of milliseconds.
+
+--*/
+
+{
+
+#ifdef __WIN32__
+
+    Sleep(Milliseconds);
+
+#else
+
+    struct timespec PollInterval;
+
+    PollInterval.tv_sec = 0;
+    PollInterval.tv_nsec = Milliseconds * 1000 * 1000;
+    nanosleep(&PollInterval, NULL);
+
+#endif
+
+    return;
+}
+
+USHORT
+ComputeTemperatureValue (
+    int Percent
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the temperature on time for the given percentage.
+
+Arguments:
+
+    Percent - Supplies the percentage on the indicator should show. 
+
+Return Value:
+
+    Returns the value to set for the temp on time.
+
+--*/
+
+{
+
+    int Value;
+
+    Value = ((TEMP_MAX - TEMP_MIN) * Percent) / 100;
+    return Value + TEMP_MIN;
+}
+
+USHORT
+ComputeFuelValue (
+    int Percent
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the fuel on time for the given percentage.
+
+Arguments:
+
+    Percent - Supplies the percentage on the indicator should show. 
+
+Return Value:
+
+    Returns the value to set for the fuel on time.
+
+--*/
+
+{
+
+    int Value;
+
+    Value = ((FUEL_MAX - FUEL_MIN) * Percent) / 100;
+    return Value + FUEL_MIN;
 }

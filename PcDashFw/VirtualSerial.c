@@ -214,6 +214,7 @@ Return Value:
     PDASHBOARD_CONFIGURATION BufferDashboard;
     uint16_t BytesRead;
     uint16_t FuelCount;
+    bool ResetTach;
     uint16_t TempCount;
     uint16_t TotalBytesRead;
 
@@ -272,6 +273,11 @@ Return Value:
                 continue;
             }
 
+            ResetTach = 0;
+            if (BufferDashboard->TachRpm != DashboardConfiguration.TachRpm) {
+                ResetTach = 1;
+            }
+
             cli();
             memcpy(&DashboardConfiguration, 
                    (uint8_t *)UsbDataBuffer, 
@@ -281,8 +287,31 @@ Return Value:
                           (ShiftRegisterValue & (~DASHBOARD_LIGHTS)) | 
                           (DashboardConfiguration.Lights & DASHBOARD_LIGHTS);
 
-            OCR3A = 20000000UL / DashboardConfiguration.TachRpm;
-            TCNT3 = 0;
+            //
+            // Adjust the tach.
+            //
+
+            if (DashboardConfiguration.TachRpm > 9000) {
+                DashboardConfiguration.TachRpm = 9000;
+            }
+
+            if (ResetTach != 0) {
+                if (DashboardConfiguration.TachRpm == 0) {
+                    TCCR3A = 0;
+
+                } else {
+                    TCCR3A = (1 << COM3A0);
+                    if (DashboardConfiguration.TachRpm < 306) {
+                        OCR3A = 0xFFFF;
+
+                    } else {
+                        OCR3A = 20000000UL / DashboardConfiguration.TachRpm;        
+                    }                
+                }
+                
+                TCNT3 = 0;
+            }
+
             sei();          
         } 
 
@@ -291,25 +320,35 @@ Return Value:
         //
 
         WriteShiftRegisterValue(ShiftRegisterValue);
-        FuelCount += 1;
-        if (FuelCount == DashboardConfiguration.FuelOn) {
+        if (DashboardConfiguration.FuelOn == 0) {
             PORTF &= ~(_BV(PORT_FUEL_GAUGE_BIT));
+
+        } else {
+            FuelCount += 1;
+            if (FuelCount == DashboardConfiguration.FuelOn) {
+                PORTF &= ~(_BV(PORT_FUEL_GAUGE_BIT));
+            }
+
+            if (FuelCount >= DashboardConfiguration.FuelTotal) {
+                PORTF |= _BV(PORT_FUEL_GAUGE_BIT);      
+                FuelCount = 0;
+            }
         }
 
-        if (FuelCount >= DashboardConfiguration.FuelTotal) {
-            PORTF |= _BV(PORT_FUEL_GAUGE_BIT);      
-            FuelCount = 0;
-        }
+        if (DashboardConfiguration.TempOn == 0) {
+            ShiftRegisterValue &= ~(_BV(DASHBOARD_TEMPERATURE_GAUGE_BIT));
 
-        TempCount += 1;
-        if (TempCount == DashboardConfiguration.TempOn) {       
-            ShiftRegisterValue &= ~(_BV(DASHBOARD_TEMPERATURE_GAUGE_BIT));  
+        } else {
+            TempCount += 1;
+            if (TempCount == DashboardConfiguration.TempOn) {       
+                ShiftRegisterValue &= ~(_BV(DASHBOARD_TEMPERATURE_GAUGE_BIT));  
 
-        }
+            }
 
-        if (TempCount >= DashboardConfiguration.TempTotal) {
-            ShiftRegisterValue |= _BV(DASHBOARD_TEMPERATURE_GAUGE_BIT);
-            TempCount = 0;
+            if (TempCount >= DashboardConfiguration.TempTotal) {
+                ShiftRegisterValue |= _BV(DASHBOARD_TEMPERATURE_GAUGE_BIT);
+                TempCount = 0;
+            }
         }
 
         //
@@ -518,6 +557,7 @@ Return Value:
 --*/
 
 {
+
     bool ConfigSuccess = true;
 
     ConfigSuccess &= CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
