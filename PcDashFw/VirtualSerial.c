@@ -222,8 +222,14 @@ Return Value:
     // Set an initial dashboard configuration.
     //
 
-    DashboardConfiguration.Lights = DASHBOARD_ILLUMINATION | DASHBOARD_POWER | 
-                                    DASHBOARD_CHECK_ENGINE;
+    DashboardConfiguration.Lights = DASHBOARD_POWER | 
+                                    DASHBOARD_TURN_RIGHT | 
+                                    DASHBOARD_TURN_LEFT | DASHBOARD_HIGH_BEAM |
+                                    DASHBOARD_BRAKE | DASHBOARD_CHECK_ENGINE | 
+                                    DASHBOARD_OIL | DASHBOARD_ANTI_LOCK | 
+                                    DASHBOARD_FUEL | DASHBOARD_CHARGE | 
+                                    DASHBOARD_SEATBELTS | DASHBOARD_DOOR | 
+                                    DASHBOARD_LEVELER | DASHBOARD_HOLD;
                                     
     DashboardConfiguration.FuelOn = 16;
     DashboardConfiguration.FuelTotal = 20;
