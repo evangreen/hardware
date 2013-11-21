@@ -24,3 +24,5 @@ Airlight Master board
 1,pack of 4 bumpers,N/A,0.50,http://www.sparkfun.com/products/10230
 1,pack of 4 nuts,4-40,1.50,http://www.sparkfun.com/products/10454
 1,pack of 8 standoffs,3/8" 4-40,3.95,http://www.sparkfun.com/products/10463
+
+Enclosure? http://www.digikey.com/product-detail/en/AC-406/377-1015-ND/386933
