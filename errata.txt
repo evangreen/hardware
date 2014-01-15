@@ -1,0 +1,10 @@
+AirRelay v1
+ * I bought the fixed version of the regulator, and the board is configured for
+   the adjustable one. Simply don't populate the 240 or 390 Ohm resistors 
+   (R16 and R17), and glom the negative side of C1 (right pad) to the left pad 
+   of R17 so that regulator pin is tied to ground.
+ * 5V and VCC are supposed to the the same net, but they are not connected on 
+   the board. To fix, Run a line from the upper pin of the 3.3V regulator to 
+   the left leg of the Link LED.
+ * MOSI and 5V_MOSI are supposed to be the same net. Wire from the BSS138 to 
+   the MOSI on the ISP programming header.
