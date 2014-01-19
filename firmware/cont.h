@@ -21,6 +21,10 @@ Author:
 //
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -35,34 +39,52 @@ Author:
 
 #define PHASES_PER_RING (PHASE_COUNT / RING_COUNT)
 
+#define ALL_PHASES_MASK 0xFF
+
 //
-// Define ring flags.
+// Define controller inputs.
 //
 
-#define RING_FORCE_OFF                  0x01
-#define RING_STOP_TIMING                0x02
-#define RING_INHIBIT_MAX_TERMINATION    0x04
-#define RING_RED_REST_MODE              0x08
-#define RING_PED_RECYCLE                0x10
-#define RING_MAX_II                     0x20
-#define RING_OMIT_RED_CLEAR             0x40
+#define CONTROLLER_INPUT_INTERVAL_ADVANCE         0x0001
+#define CONTROLLER_INPUT_INDICATOR_LAMP_CONTROL   0x0002
+#define CONTROLLER_INPUT_ALL_MIN_RECALL           0x0004
+#define CONTROLLER_INPUT_MANUAL_CONTROL           0x0008
+#define CONTROLLER_INPUT_WALK_REST_MODIFIER       0x0010
+#define CONTROLLER_INPUT_EXTERNAL_START           0x0020
+#define CONTROLLER_INPUT_STOP_TIMING              0x0040
 
 //
 // Define controller flags.
 //
 
-#define CONTROLLER_INTERVAL_ADVANCE         0x0001
-#define CONTROLLER_INDICATOR_LAMP_CONTROL   0x0002
-#define CONTROLLER_ALL_MIN_RECALL           0x0004
-#define CONTROLLER_MANUAL_CONTROL           0x0008
-#define CONTROLLER_WALK_REST_MODIFIER       0x0010
-#define CONTROLLER_FLASH_STATE              0x0020
+#define CONTROLLER_FLASH_STATE              0x0001
+#define CONTROLLER_UPDATE                   0x0002
+#define CONTROLLER_UPDATE_TIMERS            0x0004
+
+//
+// Define shifts to get to the green and yellow bits of the overlap state mask.
+// If neither is set, the overlap is red.
+//
+
+#define OVERLAP_GREEN_SHIFT 0
+#define OVERLAP_YELLOW_SHIFT OVERLAP_COUNT
+
+//
+// Define variable initial special values.
+//
+
+#define VARIABLE_INITIAL_DISABLED -1
+#define VARIABLE_INITIAL_IN_PROGRESS -2
+#define MAX_VARIABLE_INITIAL 300
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
 typedef UCHAR PHASE_MASK, *PPHASE_MASK;
+typedef UCHAR RING_MASK, *PRING_MASK;
+typedef UCHAR CNA_MASK, *PCNA_MASK;
+typedef UCHAR OVERLAP_STATE, *POVERLAP_STATE;
 
 typedef enum _SIGNAL_TIMING {
     TimingMinGreen,
@@ -109,7 +131,7 @@ typedef enum _SIGNAL_CLEARANCE_REASON {
     ClearanceNoReason,
     ClearanceGapOut,
     ClearanceMaxOut,
-    ClaranceForceOff
+    ClearanceForceOff
 } SIGNAL_CLEARANCE_REASON, *PSIGNAL_CLEARANCE_REASON;
 
 /*++
@@ -147,9 +169,6 @@ Members:
 
     ClearanceReason - Stores the reason for leaving green.
 
-    Flags - Stores a bitmask of flags governing the behavior of the ring. See
-        RING_* definitions.
-
 --*/
 
 typedef struct _SIGNAL_RING {
@@ -166,7 +185,6 @@ typedef struct _SIGNAL_RING {
     SIGNAL_INTERVAL PedInterval;
     SIGNAL_BARRIER_STATE BarrierState;
     SIGNAL_CLEARANCE_REASON ClearanceReason;
-    UCHAR Flags;
 } SIGNAL_RING, *PSIGNAL_RING;
 
 /*++
@@ -179,13 +197,22 @@ Members:
 
     Ring - Stores the current ring state.
 
+    VariableInitial - Stores the amount of extra "min green" time each phase
+        has accumulated by triggering the vehicle detector.
+
     VehicleCall - Stores the mask of vehicle calls.
 
     PedCall - Stores the mask of pedestrian calls.
 
     VehicleDetector - Stores the mask of currently active vehicle detectors.
 
+    VehicleDetector - Stores the mask of vehicle detectors that have changed
+        since the last update.
+
     PedDetector - Stores the mask of currently active pedestrian detectors.
+
+    PedDetectorChange - Stores the mask of ped detectors that have changed
+        since the last update.
 
     Hold - Stores the mask of held phases.
 
@@ -194,6 +221,33 @@ Members:
     PhaseOmit - Stores the mask of phases that will not be serviced.
 
     VariableInit - Stores the mask of phases using variable minimum green time.
+
+    ForceOff - Storse the mask of rings forced off of their current phase.
+
+    StopTiming - Stores the mask of rings asked to stop advancing time.
+
+    InhibitMaxTermination - Stores the mask of rings asked to prevent max
+        interval termination.
+
+    RedRestMode - Stores the mask of rings that rest in all-red states.
+
+    PedRecycle - Stores the mask of rings that restart the walk phase if
+        there's time on the phase and a pedestrian call.
+
+    MaxII - Stores the mask of rings using the Max II setting instead of Max I.
+
+    OmitRedClear - Stores the mask of rings that skip the red clear phase.
+
+    CallToNonActuated - Stores the mask of rings that ignore vehicle and ped
+        detectors.
+
+    OverlapState - Stores the mask describing the state of the overlap signals.
+
+    Inputs - Stores the mask of controller input values. See
+        CONTROLLER_INPUT_* definitions.
+
+    InputsChange - Stores the sticky mask of controller inputs that
+        have changed. This is cleared by the controller software when service.
 
     BarrierCrossState - Stores the current state of the barrier cross request.
 
@@ -208,14 +262,29 @@ Members:
 
 typedef struct _SIGNAL_CONTROLLER {
     SIGNAL_RING Ring[RING_COUNT];
+    USHORT VariableInitial[PHASE_COUNT];
     PHASE_MASK VehicleCall;
     PHASE_MASK PedCall;
     PHASE_MASK VehicleDetector;
+    PHASE_MASK VehicleDetectorChange;
     PHASE_MASK PedDetector;
+    PHASE_MASK PedDetectorChange;
     PHASE_MASK Hold;
     PHASE_MASK PedOmit;
     PHASE_MASK PhaseOmit;
+    PHASE_MASK Memory;
     PHASE_MASK VariableInit;
+    RING_MASK ForceOff;
+    RING_MASK StopTiming;
+    RING_MASK InhibitMaxTermination;
+    RING_MASK RedRestMode;
+    RING_MASK PedRecycle;
+    RING_MASK MaxII;
+    RING_MASK OmitRedClear;
+    CNA_MASK CallToNonActuated;
+    OVERLAP_STATE OverlapState;
+    USHORT Inputs;
+    USHORT InputsChange;
     SIGNAL_BARRIER_CROSS_STATE BarrierCrossState;
     UCHAR BarrierSide;
     USHORT Flags;
