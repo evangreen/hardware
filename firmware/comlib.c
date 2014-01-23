@@ -357,6 +357,184 @@ Return Value:
 }
 
 VOID
+HlWriteEepromByte (
+    USHORT Address,
+    UCHAR Byte
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes a byte into the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to program.
+
+    Byte - Supplies the value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UCHAR ControlValue;
+
+    //
+    // Wait for the EEPROM unit to be ready.
+    //
+
+    while ((HlReadIo(EEPROM_CONTROL) & EEPROM_CONTROL_WRITE_ENABLE) != 0) {
+        NOTHING;
+    }
+
+    //
+    // Set up the address and data registers.
+    //
+
+    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)(Address >> 8));
+    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)Address);
+    HlWriteIo(EEPROM_DATA, Byte);
+
+    //
+    // Write a logical one to the master write enable, and then within 4 cycles
+    // write one to the write enable bit. Disable interrupts around this
+    // operation since this must be done with tight timing constraints.
+    //
+
+    ControlValue = HlReadIo(EEPROM_CONTROL);
+    ControlValue |= EEPROM_CONTROL_MASTER_WRITE_ENABLE;
+    HlDisableInterrupts();
+    HlWriteIo(EEPROM_CONTROL, ControlValue);
+    HlWriteIo(EEPROM_CONTROL, ControlValue | EEPROM_CONTROL_WRITE_ENABLE);
+    HlEnableInterrupts();
+    return;
+}
+
+VOID
+HlWriteEepromWord (
+    USHORT Address,
+    USHORT Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes a word (two bytes) into the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to program.
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    HlWriteEepromByte(Address, (UCHAR)Value);
+    HlWriteEepromByte(Address + 1, (UCHAR)(Value >> BITS_PER_BYTE));
+    return;
+}
+
+UCHAR
+HlReadEepromByte (
+    UCHAR Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads a byte from the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to read.
+
+Return Value:
+
+    Returns the contents of the EEPROM memory at that byte.
+
+--*/
+
+{
+
+    UCHAR ControlRegister;
+
+    //
+    // Wait for the EEPROM unit to be ready.
+    //
+
+    while ((HlReadIo(EEPROM_CONTROL) & EEPROM_CONTROL_WRITE_ENABLE) != 0) {
+        NOTHING;
+    }
+
+    //
+    // Set up the address register.
+    //
+
+    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)(Address >> 8));
+    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)Address);
+
+    //
+    // Execute the EEPROM read.
+    //
+
+    ControlRegister = HlReadIo(EEPROM_CONTROL);
+    HlWriteIo(EEPROM_CONTROL, ControlRegister | EEPROM_CONTROL_READ_ENABLE);
+
+    //
+    // Read the resulting data.
+    //
+
+    return HlReadIo(EEPROM_DATA);
+}
+
+USHORT
+HlReadEepromWord (
+    UCHAR Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads a word (two bytes) from the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        word to read.
+
+Return Value:
+
+    Returns the contents of the EEPROM memory.
+
+--*/
+
+{
+
+    INT Value;
+
+    Value = HlReadEepromByte(Address);
+    Value |= (UINT)HlReadEepromByte(Address + 1) << BITS_PER_BYTE;
+    return Value;
+}
+
+VOID
 HlPrintString (
     PPGM String
     )

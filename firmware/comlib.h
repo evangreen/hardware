@@ -151,6 +151,100 @@ Return Value:
 --*/
 
 VOID
+HlWriteEepromByte (
+    USHORT Address,
+    UCHAR Byte
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes a byte into the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to program.
+
+    Byte - Supplies the value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlWriteEepromWord (
+    USHORT Address,
+    USHORT Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes a word (two bytes) into the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to program.
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+UCHAR
+HlReadEepromByte (
+    UCHAR Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads a byte from the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to read.
+
+Return Value:
+
+    Returns the contents of the EEPROM memory at that byte.
+
+--*/
+
+USHORT
+HlReadEepromWord (
+    UCHAR Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads a word (two bytes) from the EEPROM permanent memory.
+
+Arguments:
+
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        word to read.
+
+Return Value:
+
+    Returns the contents of the EEPROM memory.
+
+--*/
+
+VOID
 HlPrintString (
     PPGM String
     );

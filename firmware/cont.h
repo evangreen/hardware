@@ -25,6 +25,28 @@ Author:
 //
 
 //
+// This macro returns non-zero if the given overlap is green.
+//
+
+#define IS_OVERLAP_GREEN(_OverlapState, _OverlapIndex) \
+    (((_OverlapState) & (1 << ((_OverlapIndex) + OVERLAP_GREEN_SHIFT))) != 0)
+
+//
+// This macro returns non-zero if the given overlap is yellow.
+//
+
+#define IS_OVERLAP_YELLOW(_OverlapState, _OverlapIndex) \
+    (((_OverlapState) & (1 << ((_OverlapIndex) + OVERLAP_YELLOW_SHIFT))) != 0)
+
+//
+// This macro returns non-zero if the given overlap is red.
+//
+
+#define IS_OVERLAP_RED(_OverlapState, _OverlapIndex)        \
+    ((!IS_OVERLAP_GREEN(_OverlapState, _OverlapIndex)) &&   \
+     (!IS_OVERLAP_YELLOW(_OverlapState, _OverlapIndex)))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -53,6 +75,9 @@ Author:
 #define CONTROLLER_INPUT_EXTERNAL_START           0x0020
 #define CONTROLLER_INPUT_STOP_TIMING              0x0040
 
+#define CONTROLLER_INPUT_INIT_MASK \
+    (CONTROLLER_INPUT_ALL_MIN_RECALL | CONTROLLER_INPUT_WALK_REST_MODIFIER)
+
 //
 // Define controller flags.
 //
@@ -76,6 +101,37 @@ Author:
 #define VARIABLE_INITIAL_DISABLED -1
 #define VARIABLE_INITIAL_IN_PROGRESS -2
 #define MAX_VARIABLE_INITIAL 300
+
+//
+// Define output bits for the ring status.
+//
+
+#define RING_STATUS_MIN_GREEN        0x0001
+#define RING_STATUS_WALK             0x0002
+#define RING_STATUS_PASSAGE          0x0004
+#define RING_STATUS_MAX              0x0008
+#define RING_STATUS_REST             0x0010
+#define RING_STATUS_PED_CLEAR        0x0020
+#define RING_STATUS_GAP_OUT          0x0040
+#define RING_STATUS_YELLOW           0x0080
+#define RING_STATUS_MAX_OUT          0x0100
+#define RING_STATUS_RED_CLEAR        0x0200
+#define RING_STATUS_REDUCING         0x0400
+#define RING_STATUS_MAX_II           0x0800
+#define RING_STATUS_VARIABLE_INITIAL 0x1000
+
+//
+// Define the ring control bits set by the UI directly.
+//
+
+#define RING_CONTROL_OMIT_RED_CLEAR1    0x01
+#define RING_CONTROL_OMIT_RED_CLEAR2    0x02
+#define RING_CONTROL_MAX_II1            0x04
+#define RING_CONTROL_MAX_II2            0x08
+#define RING_CONTROL_PED_RECYCLE1       0x10
+#define RING_CONTROL_PED_RECYCLE2       0x20
+#define RING_CONTROL_RED_REST1          0x40
+#define RING_CONTROL_RED_REST2          0x80
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -191,6 +247,63 @@ typedef struct _SIGNAL_RING {
 
 Structure Description:
 
+    This structure defines the controller display output.
+
+Members:
+
+    Red - Stores the state of the red outputs.
+
+    Yellow - Stores the state of the yellow outputs.
+
+    Green - Stores the state of the green outputs.
+
+    DontWalk - Stores the state of the don't walk outputs.
+
+    Walk - Stores the state of the walk outputs.
+
+    OverlapState - Stores the mask describing the state of the overlap signals.
+
+    On - Stores the mask of which phases are on.
+
+    Next - Stores the state of which phases are next.
+
+    VehicleCall - Stores the state of which phases have vehicle calls on them.
+
+    PedCall - Stores the state of which phases have ped calls on them.
+
+    RingStatus - Stores an array of bitmasks of indicators describing the state
+        of each ring.
+
+    Display1 - Stores an array of integers describing the display on the
+        first time display (the units here are tenths of a second). This
+        either displays the current vehicle interval timer or the max timer.
+
+    Display2 - Stores an array of integers describing the display on the second
+        timer display (in tenths of a second). This either displays the
+        pedestrian interval or the passage timer.
+
+--*/
+
+typedef struct _SIGNAL_OUTPUT {
+    PHASE_MASK Red;
+    PHASE_MASK Yellow;
+    PHASE_MASK Green;
+    PHASE_MASK DontWalk;
+    PHASE_MASK Walk;
+    OVERLAP_STATE OverlapState;
+    PHASE_MASK On;
+    PHASE_MASK Next;
+    PHASE_MASK VehicleCall;
+    PHASE_MASK PedCall;
+    UINT RingStatus[RING_COUNT];
+    UINT Display1[RING_COUNT];
+    UINT Display2[RING_COUNT];
+} SIGNAL_OUTPUT, *PSIGNAL_OUTPUT;
+
+/*++
+
+Structure Description:
+
     This structure defines the working state of a ring in the controller.
 
 Members:
@@ -199,10 +312,6 @@ Members:
 
     VariableInitial - Stores the amount of extra "min green" time each phase
         has accumulated by triggering the vehicle detector.
-
-    VehicleCall - Stores the mask of vehicle calls.
-
-    PedCall - Stores the mask of pedestrian calls.
 
     VehicleDetector - Stores the mask of currently active vehicle detectors.
 
@@ -222,7 +331,7 @@ Members:
 
     VariableInit - Stores the mask of phases using variable minimum green time.
 
-    ForceOff - Storse the mask of rings forced off of their current phase.
+    ForceOff - Stores the mask of rings forced off of their current phase.
 
     StopTiming - Stores the mask of rings asked to stop advancing time.
 
@@ -241,8 +350,6 @@ Members:
     CallToNonActuated - Stores the mask of rings that ignore vehicle and ped
         detectors.
 
-    OverlapState - Stores the mask describing the state of the overlap signals.
-
     Inputs - Stores the mask of controller input values. See
         CONTROLLER_INPUT_* definitions.
 
@@ -255,6 +362,8 @@ Members:
 
     Flags - Stores controller-wide flags. See CONTROLLER_* definitions.
 
+    Output - Stores the output state of the controller.
+
     Time - Stores the number of tenths of a second that had elapsed at the last
         update.
 
@@ -263,8 +372,6 @@ Members:
 typedef struct _SIGNAL_CONTROLLER {
     SIGNAL_RING Ring[RING_COUNT];
     USHORT VariableInitial[PHASE_COUNT];
-    PHASE_MASK VehicleCall;
-    PHASE_MASK PedCall;
     PHASE_MASK VehicleDetector;
     PHASE_MASK VehicleDetectorChange;
     PHASE_MASK PedDetector;
@@ -282,12 +389,12 @@ typedef struct _SIGNAL_CONTROLLER {
     RING_MASK MaxII;
     RING_MASK OmitRedClear;
     CNA_MASK CallToNonActuated;
-    OVERLAP_STATE OverlapState;
     USHORT Inputs;
     USHORT InputsChange;
     SIGNAL_BARRIER_CROSS_STATE BarrierCrossState;
     UCHAR BarrierSide;
     USHORT Flags;
+    SIGNAL_OUTPUT Output;
     ULONG Time;
 } SIGNAL_CONTROLLER, *PSIGNAL_CONTROLLER;
 
@@ -300,8 +407,17 @@ typedef struct _SIGNAL_CONTROLLER {
 //
 
 extern USHORT KeTimingData[PHASE_COUNT][TimingCount];
-extern UCHAR KeOverlapData[OVERLAP_COUNT];
-extern UCHAR KeCnaData[CNA_INPUT_COUNT];
+extern PHASE_MASK KeOverlapData[OVERLAP_COUNT];
+extern CNA_MASK KeCnaData[CNA_INPUT_COUNT];
+extern PHASE_MASK KeVehicleMemory;
+extern UCHAR KeUnitControl;
+extern UCHAR KeRingControl;
+
+//
+// Define the current controller state.
+//
+
+extern SIGNAL_CONTROLLER KeController;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -342,6 +458,27 @@ Routine Description:
 Arguments:
 
     CurrentTime - Supplies the current time in tenths of a second.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+KeApplyRingControl (
+    UCHAR RingControl
+    );
+
+/*++
+
+Routine Description:
+
+    This routine applies the ring control byte specified at init by the user.
+
+Arguments:
+
+    RingControl - Supplies the new ring control value.
 
 Return Value:
 
