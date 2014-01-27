@@ -30,6 +30,8 @@ Environment:
 #include <time.h>
 #include <windows.h>
 
+#define EEPROM
+
 #include "types.h"
 #include "cont.h"
 
@@ -319,6 +321,22 @@ Return Value:
     }
 
     KepPrintGlobalControl();
+    if ((KeController.Flags & CONTROLLER_UPDATE)) {
+        printf("u");
+
+    } else {
+        printf(" ");
+    }
+
+    if ((KeController.Flags & CONTROLLER_UPDATE_TIMERS) != 0) {
+        printf("t");
+
+    } else {
+        printf(" ");
+    }
+
+    KeController.Flags &= ~(CONTROLLER_UPDATE | CONTROLLER_UPDATE_TIMERS);
+    printf("\n");
     return;
 }
 

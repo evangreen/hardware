@@ -106,6 +106,13 @@ Author:
 #define ISR_ALIASOF(_Vector) __attribute__((alias(#_Vector)))
 
 //
+// Define the GCC attribute to specify that this data belongs in the EEPROM
+// section.
+//
+
+#define EEPROM __attribute__((section(".eeprom")))
+
+//
 // Hardware I/O ports.
 //
 

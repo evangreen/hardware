@@ -25,6 +25,11 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define SIGNAL_OUT_RED      0x01
+#define SIGNAL_OUT_YELLOW   0x02
+#define SIGNAL_OUT_GREEN    0x04
+#define SIGNAL_OUT_BLINK    0x80
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -34,15 +39,67 @@ Author:
 //
 
 //
-// Store the number of milliseconds that have passed, useful for stalling. This
-// will roll over approximately every 49 days.
+// Store the current time of day down to the millisecond.
 //
 
-extern volatile ULONG HlRawMilliseconds;
+extern volatile INT HlCurrentMillisecond;
+extern volatile UCHAR HlCurrentSecond;
+extern volatile UCHAR HlCurrentMinute;
+extern volatile UCHAR HlCurrentHour;
+
+//
+// Store a raw count of tenth-seconds for the signal controller.
+//
+
+extern volatile ULONG HlTenthSeconds;
+extern volatile INT HlTenthSecondMilliseconds;
 
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+VOID
+HlUpdateIo (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine shifts the next column of LED outputs out onto the shift
+    registers.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+KeSetOutputs (
+    UCHAR Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the current value of the signal.
+
+Arguments:
+
+    Value - Supplies the signal value to set.
+
+Return Value:
+
+    None.
+
+--*/
 
 VOID
 HlInitializeUart (
@@ -152,7 +209,7 @@ Return Value:
 
 VOID
 HlWriteEepromByte (
-    USHORT Address,
+    PVOID Address,
     UCHAR Byte
     );
 
@@ -177,7 +234,7 @@ Return Value:
 
 VOID
 HlWriteEepromWord (
-    USHORT Address,
+    PVOID Address,
     USHORT Value
     );
 
@@ -202,7 +259,7 @@ Return Value:
 
 UCHAR
 HlReadEepromByte (
-    UCHAR Address
+    PVOID Address
     );
 
 /*++
@@ -224,7 +281,7 @@ Return Value:
 
 USHORT
 HlReadEepromWord (
-    UCHAR Address
+    PVOID Address
     );
 
 /*++
@@ -285,3 +342,4 @@ Return Value:
     None.
 
 --*/
+

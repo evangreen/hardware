@@ -127,7 +127,7 @@ Return Value:
 VOID
 RfReceive (
     PCHAR Buffer,
-    INT BufferSize
+    PINT BufferSize
     );
 
 /*++
@@ -142,7 +142,32 @@ Arguments:
     Buffer - Supplies a pointer to the buffer where the received data will be
         returned on success.
 
-    BufferSize - Supplies the size of the buffer in bytes.
+    BufferSize - Supplies a pointer that on input contains the maximum size of
+        the buffer. On output, contains the number of bytes received.
+
+Return Value:
+
+    None.
+
+--*/
+
+UCHAR
+RfGetSignalStrength (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the value of the signal strength register. Note that
+    this register is usually zero unless the chip is actively receiving data.
+    Therefore, it usually needs to be polled aggressively while data is being
+    sent.
+
+Arguments:
+
+    None.
 
 Return Value:
 

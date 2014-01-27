@@ -350,7 +350,7 @@ Return Value:
     RfpWriteByte(RfmRegisterControl1, 0x01);  // To ready mode
     //cbi(PORTD, RXANT);
     //sbi(PORTD, TXANT);
-    HlStall(50);
+    //HlStall(50);
 
     RfpWriteByte(RfmRegisterControl2, 0x03);  // FIFO reset
     RfpWriteByte(RfmRegisterControl2, 0x00);  // Clear FIFO
@@ -369,7 +369,7 @@ Return Value:
     //
 
     while ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) != 0) {
-        NOTHING;
+        HlUpdateIo();
     }
 
     RfpWriteByte(RfmRegisterControl1, 0x01);  // to ready mode
@@ -409,7 +409,7 @@ Return Value:
     RfpWriteByte(RfmRegisterControl1, 0x01);
     //sbi(PORTD, RXANT);
     //cbi(PORTD, TXANT);
-    HlStall(50);
+    //HlStall(50);
     RfResetReceive();
     return;
 }
@@ -461,7 +461,7 @@ Return Value:
 VOID
 RfReceive (
     PCHAR Buffer,
-    INT BufferSize
+    PINT BufferSize
     )
 
 /*++
@@ -476,7 +476,8 @@ Arguments:
     Buffer - Supplies a pointer to the buffer where the received data will be
         returned on success.
 
-    BufferSize - Supplies the size of the buffer in bytes.
+    BufferSize - Supplies a pointer that on input contains the maximum size of
+        the buffer. On output, contains the number of bytes received.
 
 Return Value:
 
@@ -486,7 +487,15 @@ Return Value:
 
 {
 
-    RfpReadFifo(Buffer, BufferSize);
+    UCHAR Length;
+
+    Length = RfpReadByte(RfmRegisterReceivedPacketLength);
+    if (Length > *BufferSize) {
+        Length = *BufferSize;
+    }
+
+    RfpReadFifo(Buffer, Length);
+    *BufferSize = Length;
 
     //
     // Enter ready mode.
@@ -494,6 +503,35 @@ Return Value:
 
     RfpWriteByte(RfmRegisterControl1, 0x01);
     return;
+}
+
+UCHAR
+RfGetSignalStrength (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the value of the signal strength register. Note that
+    this register is usually zero unless the chip is actively receiving data.
+    Therefore, it usually needs to be polled aggressively while data is being
+    sent.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return RfpReadByte(RfmRegisterReceiveSignalStrengthIndicator);
 }
 
 //
@@ -533,10 +571,10 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    HlStall(2);
+    //HlStall(2);
     HlSpiReadWriteByte(Address);
     Value = HlSpiReadWriteByte(RFM_DUMMY_VALUE);
-    HlStall(2);
+    //HlStall(2);
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
 
@@ -553,10 +591,10 @@ Return Value:
 
 #endif
 
-    HlPrintString(RegString);
-    HlPrintHexInteger(Address);
-    HlPrintHexInteger(Value);
-    HlPrintString(RegDoneString);
+    //HlPrintString(RegString);
+    //HlPrintHexInteger(Address);
+    //HlPrintHexInteger(Value);
+    //HlPrintString(RegDoneString);
     return Value;
 }
 
@@ -596,8 +634,9 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    HlStall(2);
+    //HlStall(2);
     HlSpiReadWriteByte(RfmRegisterFifoAccess);
+    HlStall(2);
 
     //
     // The airlight has to flush out the HC589 bytes before the RFM bytes.
@@ -610,14 +649,14 @@ Return Value:
     if (Size == 1) {
         PortB |= PORTB_RF_SELECT;
         HlWriteIo(PORTB, PortB);
-        HlStall(2);
+        //HlStall(2);
     }
 
     HlSpiReadWriteByte(RFM_DUMMY_VALUE);
     if (Size == 2) {
         PortB |= PORTB_RF_SELECT;
         HlWriteIo(PORTB, PortB);
-        HlStall(2);
+        //HlStall(2);
     }
 
 #endif
@@ -639,7 +678,7 @@ Return Value:
         if (ByteIndex + 2 == Size - 1) {
             PortB |= PORTB_RF_SELECT;
             HlWriteIo(PORTB, PortB);
-            HlStall(2);
+            //HlStall(2);
         }
 
 #endif
@@ -651,7 +690,7 @@ Return Value:
 
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    HlStall(2);
+    //HlStall(2);
 
 #endif
 
@@ -690,11 +729,11 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    HlStall(2);
+    //HlStall(2);
     HlSpiReadWriteByte(Address);
     HlStall(2);
     HlSpiReadWriteByte(Value);
-    HlStall(2);
+    //HlStall(2);
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
     return;
@@ -736,7 +775,7 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    HlStall(2);
+    //HlStall(2);
     HlSpiReadWriteByte(RfmRegisterFifoAccess | RFM_ADDRESS_WRITE);
 
     //
@@ -747,7 +786,7 @@ Return Value:
         HlSpiReadWriteByte(Buffer[ByteIndex]);
     }
 
-    HlStall(2);
+    //HlStall(2);
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
     return;

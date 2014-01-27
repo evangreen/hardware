@@ -48,6 +48,8 @@ typedef const void *PPGM;
 
 #ifdef _AVR_
 
+#define PACKED __attribute__((__packed__))
+
 //
 // These macros are used to read from program space. Only used internally.
 //

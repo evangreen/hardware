@@ -29,6 +29,7 @@ Environment:
 #include "comlib.h"
 #include "cont.h"
 #include "rfm22.h"
+#include "airproto.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -136,10 +137,10 @@ Environment:
 #define LED_STATUS_RED_CLEAR 0x0100
 
 //
-// Define the 1kB EEPROM layout.
+// Define the magic value programmed to know that the EEPROM is valid.
 //
 
-#define PHASE_TIMING_SIZE (TimingCount * sizeof(USHORT))
+#define EEPROM_VERIFICATION_VALUE 0xAB
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -171,19 +172,17 @@ typedef enum _LED_COLUMN {
     LedColumnCount
 } LED_COLUMN, *PLED_COLUMN;
 
-typedef enum _EEPROM_ADDRESS {
-    EepromTimingData,
-    EepromVehicleMemory = PHASE_COUNT * PHASE_TIMING_SIZE,
-    EepromUnitControl,
-    EepromRingControl,
-} EEPROM_ADDRESS, *PEEPROM_ADDRESS;
-
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
 
 VOID
-HlUpdateIo (
+HlSetLedsForController (
+    VOID
+    );
+
+VOID
+KepProcessInputs (
     VOID
     );
 
@@ -228,6 +227,11 @@ KepSetByte (
     );
 
 VOID
+KepEnterSignalStrengthMode (
+    VOID
+    );
+
+VOID
 KepClearLeds (
     VOID
     );
@@ -247,6 +251,11 @@ KepLoadNonVolatileData (
     VOID
     );
 
+UCHAR
+HlpReverseNybble (
+    UCHAR Value
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -256,10 +265,7 @@ UINT HlLedOutputs[LedColumnCount];
 INT HlInputs;
 INT HlInputsChange;
 
-INT HlCurrentMillisecond;
-UCHAR HlCurrentSecond;
-UCHAR HlCurrentMinute;
-UCHAR HlCurrentHour;
+INT HlLastIoUpdateMilliseconds;
 
 char NewlineString[] PROGMEM = "\r\n";
 char SendingString[] PROGMEM = ".";
@@ -287,11 +293,51 @@ char HlLedCharacters[16] PROGMEM = {
     0x71
 };
 
+//
+// Define globals loaded from non-volatile memory.
+//
 
-USHORT KeTimingData[PHASE_COUNT][TimingCount]; /////////////////////////////////////////
+USHORT KeTimingData[PHASE_COUNT][TimingCount];
+PHASE_MASK KeOverlapData[OVERLAP_COUNT];
+PHASE_MASK KeCnaData[CNA_INPUT_COUNT];
 PHASE_MASK KeVehicleMemory;
 UCHAR KeUnitControl;
 UCHAR KeRingControl;
+
+PHASE_MASK KePersistentPedCall;
+PHASE_MASK KePersistentVehicleCall;
+
+//
+// Define EEPROM addresses.
+//
+
+USHORT EEPROM KeTimingDataEeprom[PHASE_COUNT][TimingCount] = {
+    {60, 35, 120, 170, 40, 120, 25, 11, 0, 0, 0, 0},
+    {120, 50, 350, 250, 75, 120, 45, 19, 0, 0, 0, 0},
+    {40, 35, 140, 170, 60, 150, 20, 11, 0, 0, 0, 0},
+    {100, 30, 250, 150, 60, 120, 40, 20, 0, 0, 0, 0},
+    {60, 35, 120, 170, 40, 120, 25, 11, 0, 0, 0, 0},
+    {120, 50, 350, 250, 75, 120, 45, 19, 0, 0, 0, 0},
+    {40, 35, 140, 170, 60, 150, 20, 11, 0, 0, 0, 0},
+    {100, 30, 250, 150, 60, 120, 40, 20, 0, 0, 0, 0},
+};
+
+PHASE_MASK EEPROM KeOverlapDataEeprom[OVERLAP_COUNT] = {
+    0x03,
+    0x0C,
+    0x30,
+    0xC0
+};
+
+PHASE_MASK EEPROM KeCnaDataEeprom[CNA_INPUT_COUNT] = {
+    0xAA,
+    0xFF
+};
+
+PHASE_MASK EEPROM KeVehicleMemoryEeprom = 0xFF;
+UCHAR EEPROM KeUnitControlEeprom = 0x0;
+UCHAR EEPROM KeRingControlEeprom = 0x0;
+UCHAR EEPROM KeEepromVerificationByte = EEPROM_VERIFICATION_VALUE;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -322,17 +368,22 @@ Return Value:
 
     //CHAR Buffer[17];
     //INT ByteIndex;
-    INT Column;
-    CHAR DoneUpdate;
-    INT Mask;
+    //INT Column;
+    //CHAR DoneUpdate;
+    //INT Mask;
+    INT RisingEdge;
     USHORT TickCount;
+    UCHAR Updated;
     UCHAR Value;
 
-    HlRawMilliseconds = 0;
+    HlTenthSeconds = 0;
+    HlTenthSecondMilliseconds = 0;
     HlCurrentMillisecond = 0;
     HlCurrentSecond = 0;
     HlCurrentMinute = 0;
     HlCurrentHour = 0;
+    KePersistentPedCall = 0;
+    KePersistentVehicleCall = 0;
     KepClearLeds();
 
     //
@@ -371,9 +422,7 @@ Return Value:
     KepLoadNonVolatileData();
     RfInitialize();
     RfEnterReceiveMode();
-    DoneUpdate = FALSE;
-    Mask = 0x01;
-    Column = 0;
+    KeInitializeController(HlTenthSeconds);
     while (TRUE) {
         HlUpdateIo();
         /*if ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) == 0) {
@@ -391,7 +440,7 @@ Return Value:
             HlPrintString(NewlineString);
         }*/
 
-        if ((HlRawMilliseconds & 0xFF) == 0) {
+        /*if ((HlRawMilliseconds & 0xFF) == 0) {
             if (DoneUpdate == FALSE) {
                 if (Mask == 0x8000) {
                     HlLedOutputs[Column] = 0;
@@ -415,71 +464,43 @@ Return Value:
 
         } else {
             DoneUpdate = FALSE;
+        }*/
+
+        if ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) == 0) {
+            AirMasterProcessPacket();
         }
 
-        if ((HlInputsChange & INPUT_MENU) != 0) {
+        if (HlInputsChange != 0) {
+            RisingEdge = HlInputsChange & HlInputs;
+            if ((RisingEdge & INPUT_MENU) != 0) {
+                HlInputsChange = 0;
+                KepDisplayMainMenu();
+            }
+
+            if ((RisingEdge & INPUT_POWER) != 0) {
+                KepPowerDown();
+            }
+
+            KepProcessInputs();
             HlInputsChange = 0;
-            KepDisplayMainMenu();
         }
 
-        if ((HlInputsChange & INPUT_POWER) != 0) {
-            KepPowerDown();
-        }
+        Updated = KeUpdateController(HlTenthSeconds);
+        if (Updated != FALSE) {
+            HlSetLedsForController();
+            if ((KeController.Flags &
+                 (CONTROLLER_UPDATE | CONTROLLER_UPDATE_TIMERS)) != 0) {
 
-    }
-
-    return 0;
-}
-
-ISR(TIMER1_COMPARE_A_VECTOR, ISR_BLOCK)
-
-/*++
-
-Routine Description:
-
-    This routine implements the periodic timer interrupt service routine
-    function. This ISR leaves interrupts disabled the entire time.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    //
-    // Update the current time.
-    //
-
-    HlRawMilliseconds += 1;
-    HlCurrentMillisecond += 1;
-    if (HlCurrentMillisecond == 1000) {
-        HlCurrentMillisecond = 0;
-        HlCurrentSecond += 1;
-        if (HlCurrentSecond == 60) {
-            HlCurrentSecond = 0;
-            HlCurrentMinute += 1;
-            if (HlCurrentMinute == 60) {
-                HlCurrentMinute = 0;
-                HlCurrentHour += 1;
-                if (HlCurrentHour == 24) {
-                    HlCurrentHour = 0;
-                }
+                AirSendControllerUpdate();
+                RfEnterReceiveMode();
+                KeController.Flags &=
+                               ~(CONTROLLER_UPDATE | CONTROLLER_UPDATE_TIMERS);
             }
         }
     }
 
-    return;
+    return 0;
 }
-
-//
-// --------------------------------------------------------- Internal Functions
-//
 
 VOID
 HlUpdateIo (
@@ -506,9 +527,36 @@ Return Value:
 {
 
     UINT ColumnData;
+    INT ColumnIndex;
     UINT Inputs;
     UCHAR PortB;
     UCHAR PortD;
+
+    //
+    // Don't update more than once per millisecond.
+    //
+
+    if (HlLastIoUpdateMilliseconds == HlCurrentMillisecond) {
+        return;
+    }
+
+    HlLastIoUpdateMilliseconds = HlCurrentMillisecond;
+
+    //
+    // Skip columns that don't have anything on, to make the columns that do
+    // a bit brighter.
+    //
+
+    for (ColumnIndex = 0; ColumnIndex < LedColumnCount; ColumnIndex += 1) {
+        if (HlLedOutputs[HlCurrentColumn] != 0) {
+            break;
+        }
+
+        HlCurrentColumn += 1;
+        if (HlCurrentColumn == LedColumnCount) {
+            HlCurrentColumn = 0;
+        }
+    }
 
     //
     // Send the "load inputs" pin low to snap the latches into the shift
@@ -527,10 +575,10 @@ Return Value:
     Inputs = ~Inputs;
 
     //
-    // To the "change" global, OR in any bits that just turned to one.
+    // To the "change" global, OR in any bits that just changed.
     //
 
-    HlInputsChange |= (HlInputs ^ Inputs) & Inputs;
+    HlInputsChange |= HlInputs ^ Inputs;
     HlInputs = Inputs;
     PortB = HlReadIo(PORTB);
     HlWriteIo(PORTB, PortB | PORTB_SHIFT_SS);
@@ -547,6 +595,224 @@ Return Value:
     }
 
     HlWriteIo(PORTB, PortB);
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+VOID
+HlSetLedsForController (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the LEDs to reflect the signal controller state.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    INT DigitIndex;
+    INT DisplayIndex;
+    UINT LedValue;
+    PSIGNAL_OUTPUT Out;
+    INT Shift;
+    UINT Time;
+
+    Out = &(KeController.Output);
+
+    //
+    // Loop over each display.
+    //
+
+    for (DisplayIndex = 0; DisplayIndex < 2; DisplayIndex += 1) {
+        if (DisplayIndex == 0) {
+            Shift = BITS_PER_BYTE;
+            Time = Out->Display1[0];
+
+        } else {
+            Shift = 0;
+            Time = Out->Display2[0];
+        }
+
+        //
+        // Loop over each digit in the display.
+        //
+
+        for (DigitIndex = 0; DigitIndex < 4; DigitIndex += 1) {
+            if (DisplayIndex == 0) {
+                HlLedOutputs[LedColumnDigit0 - DigitIndex] = 0;
+            }
+
+            //
+            // Blank upper digits if they're zero.
+            //
+
+            if ((Time == 0) && (DigitIndex > 1)) {
+                LedValue = 0;
+
+            } else {
+                LedValue = LED_DIGIT(Time % 10);
+            }
+
+            Time /= 10;
+            if (DigitIndex == 1) {
+                LedValue |= DIGIT_DECIMAL_POINT;
+            }
+
+            HlLedOutputs[LedColumnDigit0 - DigitIndex] |= LedValue << Shift;
+        }
+    }
+
+    LedValue = (Out->Green & 0x0F) |
+               ((Out->Walk & 0x0F) << 4) |
+               ((UINT)(Out->Red & 0x0F) << 8) |
+               ((UINT)(Out->Yellow & 0x0F) << 12);
+
+    HlLedOutputs[LedColumnGreenWalkRedYellow] = LedValue;
+    LedValue = (Out->RingStatus[0] & 0x001F) |
+               ((UINT)(Out->DontWalk & 0x0F) << 8) |
+               (((UINTN)Out->RingStatus[0] & 0x01E0) << (12 - 5));
+
+    HlLedOutputs[LedColumnStatusDontWalk] = LedValue;
+    LedValue = (Out->On & 0x0F) | ((Out->PedCall & 0x0F) << 4);
+    if ((Out->RingStatus[0] & RING_STATUS_RED_CLEAR) != 0) {
+        LedValue |= 0x0100;
+    }
+
+    HlLedOutputs[LedColumnOnPedCallRedClear] = LedValue;
+    LedValue = (Out->Next & 0x0F) |
+               ((Out->VehicleCall & 0x0F) << 4);
+
+    LedValue <<= 8;
+    HlLedOutputs[LedColumnNextVehicleCall] = LedValue;
+    return;
+}
+
+VOID
+KepProcessInputs (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes user requests from the input panel.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    INT Inputs;
+    UINT RisingEdge;
+    PHASE_MASK VehicleCall;
+    PHASE_MASK PedCall;
+
+    //
+    // If UP is being held down at the same time, turn the calls on permanently.
+    //
+
+    Inputs = HlInputs;
+    if ((Inputs & INPUT_UP) != 0) {
+        RisingEdge = HlInputsChange & HlInputs;
+        if ((RisingEdge & INPUT_VEHICLE1) != 0) {
+            KePersistentVehicleCall ^= 0x01;
+        }
+
+        if ((RisingEdge & INPUT_VEHICLE2) != 0) {
+            KePersistentVehicleCall ^= 0x02;
+        }
+
+        if ((RisingEdge & INPUT_VEHICLE3) != 0) {
+            KePersistentVehicleCall ^= 0x04;
+        }
+
+        if ((RisingEdge & INPUT_VEHICLE4) != 0) {
+            KePersistentVehicleCall ^= 0x08;
+        }
+
+        if ((RisingEdge & INPUT_PED1) != 0) {
+            KePersistentPedCall ^= 0x01;
+        }
+
+        if ((RisingEdge & INPUT_PED2) != 0) {
+            KePersistentPedCall ^= 0x02;
+        }
+
+        if ((RisingEdge & INPUT_PED3) != 0) {
+            KePersistentPedCall ^= 0x04;
+        }
+
+        if ((RisingEdge & INPUT_PED4) != 0) {
+            KePersistentPedCall ^= 0x08;
+        }
+
+        Inputs = 0;
+    }
+
+    VehicleCall = KePersistentVehicleCall;
+    PedCall = KePersistentPedCall;
+    if ((Inputs & INPUT_VEHICLE1) != 0) {
+        VehicleCall |= 0x01;
+    }
+
+    if ((Inputs & INPUT_VEHICLE2) != 0) {
+        VehicleCall |= 0x02;
+    }
+
+    if ((Inputs & INPUT_VEHICLE3) != 0) {
+        VehicleCall |= 0x04;
+    }
+
+    if ((Inputs & INPUT_VEHICLE4) != 0) {
+        VehicleCall |= 0x08;
+    }
+
+    if ((Inputs & INPUT_PED1) != 0) {
+        PedCall |= 0x01;
+    }
+
+    if ((Inputs & INPUT_PED2) != 0) {
+        PedCall |= 0x02;
+    }
+
+    if ((Inputs & INPUT_PED3) != 0) {
+        PedCall |= 0x04;
+    }
+
+    if ((Inputs & INPUT_PED4) != 0) {
+        PedCall |= 0x08;
+    }
+
+    KeController.VehicleDetectorChange |=
+                                KeController.VehicleDetector ^ VehicleCall;
+
+    KeController.PedDetectorChange |= KeController.PedDetector ^ PedCall;
+    KeController.VehicleDetector = VehicleCall;
+    KeController.PedDetector = PedCall;
+
     return;
 }
 
@@ -574,6 +840,7 @@ Return Value:
 {
 
     UCHAR Exit;
+    INT RisingEdge;
     MAIN_MENU_SELECTION Selection;
 
     Exit = FALSE;
@@ -590,7 +857,8 @@ Return Value:
                                                   1 << (Selection - 1 - 4 + 8);
         }
 
-        if ((HlInputsChange & (INPUT_MENU | INPUT_NEXT)) != 0) {
+        RisingEdge = HlInputsChange & HlInputs;
+        if ((RisingEdge & (INPUT_MENU | INPUT_NEXT)) != 0) {
             HlInputsChange = 0;
             switch (Selection) {
             case MainMenuProgram:
@@ -622,6 +890,7 @@ Return Value:
                 break;
 
             case MainMenuSignalStrength:
+                KepEnterSignalStrengthMode();
                 break;
 
             case MainMenuExit:
@@ -631,21 +900,21 @@ Return Value:
             }
         }
 
-        if ((HlInputsChange & INPUT_UP) != 0) {
+        if ((RisingEdge & INPUT_UP) != 0) {
             Selection += 1;
             if (Selection == MainMenuCount) {
                 Selection = MainMenuInvalid + 1;
             }
         }
 
-        if ((HlInputsChange & INPUT_DOWN) != 0) {
+        if ((RisingEdge & INPUT_DOWN) != 0) {
             Selection -= 1;
             if (Selection == MainMenuInvalid) {
                 Selection = MainMenuCount - 1;
             }
         }
 
-        if ((HlInputsChange & INPUT_POWER) != 0) {
+        if ((RisingEdge & INPUT_POWER) != 0) {
             return;
         }
 
@@ -689,9 +958,7 @@ Return Value:
 
 {
 
-    INT Address;
     ULONG BlinkStart;
-    UCHAR Dirty;
     UCHAR Exit;
     UCHAR Hundreds;
     UINT LedValue;
@@ -699,6 +966,7 @@ Return Value:
     INT Phase;
     INT PreviousPhase;
     SIGNAL_TIMING PreviousTiming;
+    INT RisingEdge;
     INT SelectedField;
     UCHAR Tenths;
     UCHAR Tens;
@@ -711,9 +979,8 @@ Return Value:
     Timing = TimingMinGreen;
     PreviousTiming = Timing;
     TimingValue = KeTimingData[Phase - 1][Timing];
-    Dirty = FALSE;
     Exit = FALSE;
-    BlinkStart = HlRawMilliseconds;
+    BlinkStart = HlCurrentMillisecond;
     SelectedField = 0;
     while (TRUE) {
         Hundreds = (TimingValue / 1000) % 10;
@@ -780,18 +1047,6 @@ Return Value:
             HlLedOutputs[LedColumnOnPedCallRedClear] |= LED_STATUS_RED_CLEAR;
             break;
 
-        case TimingSecondsPerActuation:
-            break;
-
-        case TimingTimeToReduce:
-            break;
-
-        case TimingBeforeReduction:
-            break;
-
-        case TimingMinGap:
-            break;
-
         default:
             break;
         }
@@ -812,7 +1067,7 @@ Return Value:
         // Blank the blinky one on the second half of every second.
         //
 
-        if (((HlRawMilliseconds - BlinkStart) & 0x0200) != 0) {
+        if (((HlCurrentMillisecond - BlinkStart) & 0x0200) != 0) {
             if (SelectedField < 2) {
                 HlLedOutputs[LedColumnDigit3 + (SelectedField * 2)] &= ~0xFF00;
                 HlLedOutputs[LedColumnDigit3 + (SelectedField * 2) + 1] &=
@@ -827,7 +1082,8 @@ Return Value:
         // Move to the next digit if desired.
         //
 
-        if ((HlInputsChange & INPUT_NEXT) != 0) {
+        RisingEdge = HlInputsChange & HlInputs;
+        if ((RisingEdge & INPUT_NEXT) != 0) {
             if (SelectedField >= 5) {
                 SelectedField = 0;
 
@@ -835,14 +1091,14 @@ Return Value:
                 SelectedField += 1;
             }
 
-            BlinkStart = HlRawMilliseconds - 0x0200;
+            BlinkStart = HlCurrentMillisecond - 0x0200;
         }
 
         //
         // Increment if desired.
         //
 
-        if ((HlInputsChange & INPUT_UP) != 0) {
+        if ((RisingEdge & INPUT_UP) != 0) {
             switch (SelectedField) {
             case 0:
                 if (Phase < PHASE_COUNT) {
@@ -867,7 +1123,6 @@ Return Value:
             case 2:
                 if (TimingValue < 10000 - 1000) {
                     TimingValue += 1000;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -875,7 +1130,6 @@ Return Value:
             case 3:
                 if (TimingValue < 10000 - 100) {
                     TimingValue += 100;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -883,7 +1137,6 @@ Return Value:
             case 4:
                 if (TimingValue < 10000 - 10) {
                     TimingValue += 10;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -891,7 +1144,6 @@ Return Value:
             case 5:
                 if (TimingValue < 10000 - 1) {
                     TimingValue += 1;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -905,7 +1157,7 @@ Return Value:
         // Decrement if desired.
         //
 
-        if ((HlInputsChange & INPUT_DOWN) != 0) {
+        if ((RisingEdge & INPUT_DOWN) != 0) {
             switch (SelectedField) {
             case 0:
                 if (Phase > 1) {
@@ -930,7 +1182,6 @@ Return Value:
             case 2:
                 if (TimingValue >= 1000) {
                     TimingValue -= 1000;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -938,7 +1189,6 @@ Return Value:
             case 3:
                 if (TimingValue >= 100) {
                     TimingValue -= 100;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -946,7 +1196,6 @@ Return Value:
             case 4:
                 if (TimingValue >= 10) {
                     TimingValue -= 10;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -954,7 +1203,6 @@ Return Value:
             case 5:
                 if (TimingValue >= 0) {
                     TimingValue -= 1;
-                    Dirty = TRUE;
                 }
 
                 break;
@@ -964,16 +1212,16 @@ Return Value:
             }
         }
 
-        if ((HlInputsChange & INPUT_MENU) != 0) {
+        if ((RisingEdge & INPUT_MENU) != 0) {
             Exit = TRUE;
         }
 
-        if ((HlInputsChange & INPUT_POWER) != 0) {
+        if ((RisingEdge & INPUT_POWER) != 0) {
             return;
         }
 
-        if (HlInputsChange != 0) {
-            BlinkStart = HlRawMilliseconds;
+        if (RisingEdge != 0) {
+            BlinkStart = HlCurrentMillisecond;
         }
 
         //
@@ -984,15 +1232,21 @@ Return Value:
         if ((Phase != PreviousPhase) || (Timing != PreviousTiming) ||
             (Exit != FALSE)) {
 
-            if (Dirty != FALSE) {
+            if (KeTimingData[PreviousPhase - 1][PreviousTiming] !=
+                TimingValue) {
+
                 TimingValue %= 10000;
                 KeTimingData[PreviousPhase - 1][PreviousTiming] = TimingValue;
-                Address = EepromTimingData +
-                          ((PreviousPhase - 1) * PHASE_TIMING_SIZE) +
-                          (PreviousTiming * sizeof(USHORT));
+                HlWriteEepromWord(
+                      &(KeTimingDataEeprom[PreviousPhase - 1][PreviousTiming]),
+                      TimingValue);
 
-                HlWriteEepromWord(Address, TimingValue);
-                Dirty = FALSE;
+                if (HlReadEepromByte(&KeEepromVerificationByte) !=
+                    EEPROM_VERIFICATION_VALUE) {
+
+                    HlWriteEepromByte(&KeEepromVerificationByte,
+                                      EEPROM_VERIFICATION_VALUE);
+                }
             }
 
             PreviousPhase = Phase;
@@ -1051,7 +1305,8 @@ Return Value:
     KepDebounceStall();
     LongClock = FALSE;
     KepClearLeds();
-    ClockStart = HlRawMilliseconds;
+    AirSendRawOutput(0, 0, 0, 0, 0);
+    ClockStart = HlTenthSeconds;
     while (TRUE) {
         Hour = HlCurrentHour;
         Minute = HlCurrentMinute;
@@ -1063,7 +1318,7 @@ Return Value:
             Hour -= 12;
         }
 
-        if (HlRawMilliseconds - ClockStart > 30000) {
+        if (HlTenthSeconds - ClockStart > 300) {
             LongClock = TRUE;
         }
 
@@ -1092,7 +1347,7 @@ Return Value:
 
         HlLedOutputs[LedColumnDigit0] = LedValue;
         HlUpdateIo();
-        if ((HlInputsChange & INPUT_POWER) != 0) {
+        if ((HlInputsChange & HlInputs & INPUT_POWER) != 0) {
             break;
         }
     }
@@ -1116,7 +1371,7 @@ Return Value:
 
     while (TRUE) {
         HlUpdateIo();
-        if ((HlInputsChange & INPUT_POWER) != 0) {
+        if ((HlInputsChange & HlInputs & INPUT_POWER) != 0) {
             break;
         }
     }
@@ -1155,6 +1410,7 @@ Return Value:
     UCHAR Hours;
     UINT LedValue;
     UCHAR Minutes;
+    INT RisingEdge;
     INT SelectedDigit;
 
     KepClearLeds();
@@ -1162,7 +1418,7 @@ Return Value:
     Minutes = HlCurrentMinute;
     Dirty = FALSE;
     Exit = FALSE;
-    BlinkStart = HlRawMilliseconds;
+    BlinkStart = HlCurrentMillisecond;
     SelectedDigit = 0;
     while (TRUE) {
 
@@ -1185,7 +1441,7 @@ Return Value:
         // Blank the blinky one on the second half of every second.
         //
 
-        if (((HlRawMilliseconds - BlinkStart) & 0x0200) != 0) {
+        if (((HlCurrentMillisecond - BlinkStart) & 0x0200) != 0) {
             if (SelectedDigit == 0) {
                 HlLedOutputs[LedColumnDigit3] = 0;
                 HlLedOutputs[LedColumnDigit2] = 0;
@@ -1200,7 +1456,8 @@ Return Value:
         // Move to the next digit if desired.
         //
 
-        if ((HlInputsChange & INPUT_NEXT) != 0) {
+        RisingEdge = HlInputsChange & HlInputs;
+        if ((RisingEdge & INPUT_NEXT) != 0) {
             if (SelectedDigit == 0) {
                 SelectedDigit = 1;
 
@@ -1208,14 +1465,14 @@ Return Value:
                 SelectedDigit = 0;
             }
 
-            BlinkStart = HlRawMilliseconds - 0x0200;
+            BlinkStart = HlCurrentMillisecond - 0x0200;
         }
 
         //
         // Increment if desired.
         //
 
-        if ((HlInputsChange & INPUT_UP) != 0) {
+        if ((RisingEdge & INPUT_UP) != 0) {
             Dirty = TRUE;
             if (SelectedDigit == 0) {
                 if (Hours >= 23) {
@@ -1239,7 +1496,7 @@ Return Value:
         // Decrement if desired.
         //
 
-        if ((HlInputsChange & INPUT_DOWN) != 0) {
+        if ((RisingEdge & INPUT_DOWN) != 0) {
             Dirty = TRUE;
             if (SelectedDigit == 0) {
                 if (Hours == 0) {
@@ -1259,16 +1516,16 @@ Return Value:
             }
         }
 
-        if ((HlInputsChange & INPUT_MENU) != 0) {
+        if ((RisingEdge & INPUT_MENU) != 0) {
             Exit = TRUE;
         }
 
-        if ((HlInputsChange & INPUT_POWER) != 0) {
+        if ((RisingEdge & INPUT_POWER) != 0) {
             return;
         }
 
-        if (HlInputsChange != 0) {
-            BlinkStart = HlRawMilliseconds;
+        if (RisingEdge != 0) {
+            BlinkStart = HlCurrentMillisecond;
         }
 
         //
@@ -1329,13 +1586,8 @@ Return Value:
     NewValue = KepSetByte(KeVehicleMemory);
     if (NewValue != KeVehicleMemory) {
         KeVehicleMemory = NewValue;
-        HlWriteEepromByte(EepromVehicleMemory, NewValue);
-
-        //
-        // TODO: Load it into the controller as well.
-        //
-
-        // KeController.Memory = NewValue;
+        HlWriteEepromByte(&KeVehicleMemoryEeprom, KeVehicleMemory);
+        KeController.Memory = NewValue;
     }
 
     return;
@@ -1368,16 +1620,14 @@ Return Value:
 
     NewValue = KepSetByte(KeUnitControl);
     if (NewValue != KeUnitControl) {
-        HlWriteEepromByte(EepromUnitControl,
-                          NewValue & CONTROLLER_INPUT_INIT_MASK);
+        if ((NewValue & CONTROLLER_INPUT_INIT_MASK) != KeUnitControl) {
+            HlWriteEepromByte(&KeUnitControlEeprom,
+                              NewValue & CONTROLLER_INPUT_INIT_MASK);
+        }
 
-        //
-        // TODO: Load it into the controller as well.
-        //
-
-        // KeController.Inputs |= (NewValue ^ KeUnitControl) & NewValue;
-        // KeController.Inputs &= ~((NewValue ^ KeUnitControl) & KeUnitControl;
-        // KeController.InputsChage = NewValue ^ KeUnitControl;
+        KeController.Inputs |= (NewValue ^ KeUnitControl) & NewValue;
+        KeController.Inputs &= ~((NewValue ^ KeUnitControl) & KeUnitControl);
+        KeController.InputsChange = NewValue ^ KeUnitControl;
         KeUnitControl = NewValue;
     }
 
@@ -1411,14 +1661,9 @@ Return Value:
 
     NewValue = KepSetByte(KeRingControl);
     if (NewValue != KeRingControl) {
-        HlWriteEepromByte(EepromRingControl, NewValue);
-
-        //
-        // TODO: Apply to the controller as well.
-        //
-
-        //KeApplyRingControl(NewValue);
-        KeUnitControl = NewValue;
+        HlWriteEepromByte(&KeRingControlEeprom, NewValue);
+        KeApplyRingControl(NewValue);
+        KeRingControl = NewValue;
     }
 
     return;
@@ -1448,8 +1693,9 @@ Return Value:
 
 {
 
-    UCHAR Red;
     UCHAR Exit;
+    UCHAR Red;
+    INT RisingEdge;
     UCHAR Yellow;
 
     KepClearLeds();
@@ -1473,11 +1719,13 @@ Return Value:
         HlLedOutputs[LedColumnGreenWalkRedYellow] =
                      ((UINT)(Red & 0x0F) << 8) | ((UINT)(Yellow & 0x0F) << 12);
 
-        if ((HlInputsChange & INPUT_MENU) != 0) {
+        RisingEdge = HlInputsChange & HlInputs;
+        if ((RisingEdge & INPUT_MENU) != 0) {
             Exit = TRUE;
         }
 
-        if ((HlInputsChange & INPUT_POWER) != 0) {
+        if ((RisingEdge & INPUT_POWER) != 0) {
+            HlInputsChange = 0;
             return;
         }
 
@@ -1525,13 +1773,14 @@ Return Value:
     UCHAR Dirty;
     UCHAR Exit;
     UINT LedValue;
+    INT RisingEdge;
     INT SelectedDigit;
     UCHAR Value;
 
     KepClearLeds();
     Dirty = FALSE;
     Exit = FALSE;
-    BlinkStart = HlRawMilliseconds;
+    BlinkStart = HlCurrentMillisecond;
     SelectedDigit = 0;
     Value = InitialValue;
     while (TRUE) {
@@ -1549,7 +1798,7 @@ Return Value:
         // Blank the blinky one on the second half of every second.
         //
 
-        if (((HlRawMilliseconds - BlinkStart) & 0x0200) != 0) {
+        if (((HlCurrentMillisecond - BlinkStart) & 0x0200) != 0) {
             if (SelectedDigit == 0) {
                 HlLedOutputs[LedColumnDigit1] = 0;
 
@@ -1562,7 +1811,8 @@ Return Value:
         // Move to the next digit if desired.
         //
 
-        if ((HlInputsChange & INPUT_NEXT) != 0) {
+        RisingEdge = HlInputsChange & HlInputs;
+        if ((RisingEdge & INPUT_NEXT) != 0) {
             if (SelectedDigit == 0) {
                 SelectedDigit = 1;
 
@@ -1570,14 +1820,14 @@ Return Value:
                 SelectedDigit = 0;
             }
 
-            BlinkStart = HlRawMilliseconds - 0x0200;
+            BlinkStart = HlCurrentMillisecond - 0x0200;
         }
 
         //
         // Increment if desired.
         //
 
-        if ((HlInputsChange & INPUT_UP) != 0) {
+        if ((RisingEdge & INPUT_UP) != 0) {
             Dirty = TRUE;
             if (SelectedDigit == 0) {
                 if ((Value & 0xF0) == 0xF0) {
@@ -1601,7 +1851,7 @@ Return Value:
         // Decrement if desired.
         //
 
-        if ((HlInputsChange & INPUT_DOWN) != 0) {
+        if ((RisingEdge & INPUT_DOWN) != 0) {
             Dirty = TRUE;
             if (SelectedDigit == 0) {
                 if ((Value & 0xF0) == 0x00) {
@@ -1625,48 +1875,49 @@ Return Value:
         // Shortcuts for bits.
         //
 
-        if ((HlInputsChange & INPUT_VEHICLE1) != 0) {
+        if ((RisingEdge & INPUT_VEHICLE1) != 0) {
             Value ^= 0x08;
         }
 
-        if ((HlInputsChange & INPUT_VEHICLE2) != 0) {
+        if ((RisingEdge & INPUT_VEHICLE2) != 0) {
             Value ^= 0x04;
         }
 
-        if ((HlInputsChange & INPUT_VEHICLE3) != 0) {
+        if ((RisingEdge & INPUT_VEHICLE3) != 0) {
             Value ^= 0x02;
         }
 
-        if ((HlInputsChange & INPUT_VEHICLE4) != 0) {
+        if ((RisingEdge & INPUT_VEHICLE4) != 0) {
             Value ^= 0x01;
         }
 
-        if ((HlInputsChange & INPUT_PED1) != 0) {
+        if ((RisingEdge & INPUT_PED1) != 0) {
             Value ^= 0x80;
         }
 
-        if ((HlInputsChange & INPUT_PED2) != 0) {
+        if ((RisingEdge & INPUT_PED2) != 0) {
             Value ^= 0x40;
         }
 
-        if ((HlInputsChange & INPUT_PED3) != 0) {
+        if ((RisingEdge & INPUT_PED3) != 0) {
             Value ^= 0x20;
         }
 
-        if ((HlInputsChange & INPUT_PED4) != 0) {
+        if ((RisingEdge & INPUT_PED4) != 0) {
             Value ^= 0x10;
         }
 
-        if ((HlInputsChange & INPUT_MENU) != 0) {
+        if ((RisingEdge & INPUT_MENU) != 0) {
             Exit = TRUE;
         }
 
-        if ((HlInputsChange & INPUT_POWER) != 0) {
+        if ((RisingEdge & INPUT_POWER) != 0) {
+            HlInputsChange = 0;
             return Value;
         }
 
-        if (HlInputsChange != 0) {
-            BlinkStart = HlRawMilliseconds;
+        if (RisingEdge != 0) {
+            BlinkStart = HlCurrentMillisecond;
         }
 
         if (HlInputsChange != 0) {
@@ -1684,6 +1935,193 @@ Return Value:
     KepClearLeds();
     HlInputsChange = 0;
     return Value;
+}
+
+VOID
+KepEnterSignalStrengthMode (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enters the signal strength program, where the devices and
+    controller can display their signal strengths.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG BlinkStart;
+    INT Delta;
+    UCHAR DeviceId;
+    INT EchoTimer;
+    UCHAR Exit;
+    UINT LedValue;
+    UCHAR PacketReceived;
+    UCHAR PacketToggle;
+    volatile INT PreviousTime;
+    INT RisingEdge;
+    UCHAR Strength;
+    UCHAR StrengthRegister;
+    volatile INT Time;
+
+    KepClearLeds();
+    DeviceId = 1;
+    Exit = FALSE;
+    PacketToggle = 0;
+    Strength = 0;
+    do {
+        PreviousTime = HlCurrentMillisecond;
+
+    } while (PreviousTime != HlCurrentMillisecond);
+
+    BlinkStart = PreviousTime;
+    EchoTimer = 500;
+    while (TRUE) {
+
+        //
+        // Set the digits.
+        //
+
+        LedValue = (LED_DIGIT((DeviceId >> 4) & 0x0F) << BITS_PER_BYTE) |
+                   LED_DIGIT((Strength >> 4) & 0x0F);
+
+        HlLedOutputs[LedColumnDigit1] = LedValue;
+        LedValue = (LED_DIGIT(DeviceId & 0x0F) << BITS_PER_BYTE) |
+                   LED_DIGIT(Strength & 0x0F) | PacketToggle;
+
+        HlLedOutputs[LedColumnDigit0] = LedValue;
+
+        //
+        // Blank the blinky one on the second half of every second.
+        //
+
+        if (((HlCurrentMillisecond - BlinkStart) & 0x0200) != 0) {
+            HlLedOutputs[LedColumnDigit1] &= ~0xFF00;
+            HlLedOutputs[LedColumnDigit0] &= ~0xFF00;
+        }
+
+        RisingEdge = HlInputsChange & HlInputs;
+
+        //
+        // Increment if desired.
+        //
+
+        if ((RisingEdge & INPUT_UP) != 0) {
+            if (DeviceId == 0xFE) {
+                DeviceId = 0;
+
+            } else {
+                DeviceId += 1;
+            }
+
+            Strength = 0;
+        }
+
+        //
+        // Decrement if desired.
+        //
+
+        if ((RisingEdge & INPUT_DOWN) != 0) {
+            if (DeviceId == 0) {
+                DeviceId = 0xFE;
+
+            } else {
+                DeviceId -= 1;
+            }
+
+            Strength = 0;
+        }
+
+        if ((RisingEdge & INPUT_MENU) != 0) {
+            Exit = TRUE;
+        }
+
+        if ((RisingEdge & INPUT_POWER) != 0) {
+            return;
+        }
+
+        if (RisingEdge != 0) {
+            BlinkStart = HlCurrentMillisecond;
+        }
+
+        //
+        // Increment the echo timer.
+        //
+
+        do {
+            Time = HlCurrentMillisecond;
+
+        } while (Time != HlCurrentMillisecond);
+        if (Time >= PreviousTime) {
+            Delta = Time - PreviousTime;
+
+        } else {
+            Delta = Time + 1000 - PreviousTime;
+        }
+
+        PreviousTime = Time;
+        EchoTimer += Delta;
+
+        //
+        // Send an echo if the echo timer has expired.
+        //
+
+        if (EchoTimer >= 500) {
+            while (EchoTimer >= 500) {
+                EchoTimer -= 500;
+            }
+
+            AirSendEchoRequest(DeviceId);
+            HlLedOutputs[LedColumnDigit3] ^= DIGIT_DECIMAL_POINT ;
+        }
+
+        //
+        // Receive a packet if able.
+        //
+
+        if ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) == 0) {
+            PacketReceived = AirMasterProcessPacket();
+            if (PacketReceived != FALSE) {
+                PacketToggle ^= DIGIT_DECIMAL_POINT;
+            }
+        }
+
+        //
+        // Try to read the strength register, and set it if something non-zero
+        // comes back.
+        //
+
+        StrengthRegister = RfGetSignalStrength();
+        if (StrengthRegister > 0x50) {
+            Strength = StrengthRegister;
+        }
+
+        if (HlInputsChange != 0) {
+            KepDebounceStall();
+            HlInputsChange = 0;
+        }
+
+        if (Exit != FALSE) {
+            break;
+        }
+
+        HlUpdateIo();
+    }
+
+    KepClearLeds();
+    HlInputsChange = 0;
+    return;
 }
 
 VOID
@@ -1775,32 +2213,87 @@ Return Value:
 
 {
 
-    USHORT Address;
     INT Phase;
     SIGNAL_TIMING Timing;
     USHORT Value;
 
-    for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
-        for (Timing = 0; Timing < TimingCount; Timing += 1) {
-            Address = EepromTimingData +
-                      (Phase * PHASE_TIMING_SIZE) + (Timing * sizeof(USHORT));
+    //
+    // If the EEPROM is valid, load data from it.
+    //
 
-            Value = HlReadEepromWord(Address);
-            if (Value > 10000) {
-                Value = 0;
+    if (HlReadEepromByte(&KeEepromVerificationByte) ==
+        EEPROM_VERIFICATION_VALUE) {
+
+        for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
+            for (Timing = 0; Timing < TimingCount; Timing += 1) {
+                Value = HlReadEepromWord(&(KeTimingDataEeprom[Phase][Timing]));
+                if (Value == 0xFFFF) {
+                    Value = 50;
+                }
+
+                KeTimingData[Phase][Timing] = Value;
             }
-
-            KeTimingData[Phase][Timing] = Value;
         }
-    }
 
-    KeVehicleMemory = HlReadEepromByte(EepromVehicleMemory);
-    KeUnitControl = HlReadEepromByte(EepromUnitControl);
-    if (KeUnitControl == 0xFF) {
+        KeVehicleMemory = HlReadEepromByte(&KeVehicleMemoryEeprom);
+        KeUnitControl = HlReadEepromByte(&KeUnitControlEeprom);
+        if (KeUnitControl == 0xFF) {
+            KeUnitControl = 0;
+        }
+
+        KeRingControl = HlReadEepromByte(&KeRingControlEeprom);
+
+    //
+    // The EEPROM is probably unprogrammed. Fill the data with some default
+    // values.
+    //
+
+    } else {
+        for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
+            for (Timing = 0; Timing < TimingCount; Timing += 1) {
+                KeTimingData[Phase][Timing] = 50;
+            }
+        }
+
+        KeVehicleMemory = 0xFF;
         KeUnitControl = 0;
+        KeRingControl = 0;
     }
 
-    KeRingControl = HlReadEepromByte(EepromRingControl);
     return;
+}
+
+UCHAR
+HlpReverseNybble (
+    UCHAR Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reverses the order of the lower four bits of the given value.
+    The upper four bits will be cleared.
+
+Arguments:
+
+    Value - Supplies the byte whose first nybble should be reversed.
+
+Return Value:
+
+    Returns the result, reversed.
+
+--*/
+
+{
+
+    UCHAR Result;
+
+    Result = ((Value & 0x01) << 3) |
+             ((Value & 0x02) << 1) |
+             ((Value & 0x04) >> 1) |
+             ((Value & 0x08) >> 3);
+
+    return Result;
 }
 

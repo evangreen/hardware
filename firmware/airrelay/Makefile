@@ -22,7 +22,8 @@
 
 BINARY := airrelay
 
-OBJS := airrelay.o      \
+OBJS := airproto.o      \
+        airrelay.o      \
         comlib.o        \
         rfm22.o
 

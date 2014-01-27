@@ -82,9 +82,8 @@ Author:
 // Define controller flags.
 //
 
-#define CONTROLLER_FLASH_STATE              0x0001
-#define CONTROLLER_UPDATE                   0x0002
-#define CONTROLLER_UPDATE_TIMERS            0x0004
+#define CONTROLLER_UPDATE                   0x0001
+#define CONTROLLER_UPDATE_TIMERS            0x0002
 
 //
 // Define shifts to get to the green and yellow bits of the overlap state mask.
@@ -119,6 +118,7 @@ Author:
 #define RING_STATUS_REDUCING         0x0400
 #define RING_STATUS_MAX_II           0x0800
 #define RING_STATUS_VARIABLE_INITIAL 0x1000
+#define RING_STATUS_GREEN            0x2000
 
 //
 // Define the ring control bits set by the UI directly.
@@ -367,6 +367,9 @@ Members:
     Time - Stores the number of tenths of a second that had elapsed at the last
         update.
 
+    FlashTimer - Stores the number of tenth seconds mod ten, for generating the
+        flash logic.
+
 --*/
 
 typedef struct _SIGNAL_CONTROLLER {
@@ -396,6 +399,7 @@ typedef struct _SIGNAL_CONTROLLER {
     USHORT Flags;
     SIGNAL_OUTPUT Output;
     ULONG Time;
+    UCHAR FlashTimer;
 } SIGNAL_CONTROLLER, *PSIGNAL_CONTROLLER;
 
 //
@@ -444,7 +448,7 @@ Return Value:
 
 --*/
 
-VOID
+UCHAR
 KeUpdateController (
     ULONG CurrentTime
     );
@@ -461,7 +465,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE if the controller's time advanced at all.
+
+    FALSE if time did not advance.
 
 --*/
 

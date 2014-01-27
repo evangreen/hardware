@@ -59,8 +59,75 @@ Environment:
 volatile ULONG HlRawMilliseconds;
 
 //
+// Store the current time of day down to the millisecond.
+//
+
+volatile INT HlCurrentMillisecond;
+volatile UCHAR HlCurrentSecond;
+volatile UCHAR HlCurrentMinute;
+volatile UCHAR HlCurrentHour;
+
+//
+// Store a raw count of tenth-seconds for the signal controller.
+//
+
+volatile ULONG HlTenthSeconds;
+volatile INT HlTenthSecondMilliseconds;
+
+//
 // ------------------------------------------------------------------ Functions
 //
+
+ISR(TIMER1_COMPARE_A_VECTOR, ISR_BLOCK)
+
+/*++
+
+Routine Description:
+
+    This routine implements the periodic timer interrupt service routine
+    function. This ISR leaves interrupts disabled the entire time.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Update the current time and global tenth-second counter.
+    //
+
+    HlTenthSecondMilliseconds += 1;
+    if (HlTenthSecondMilliseconds == 100) {
+        HlTenthSeconds += 1;
+        HlTenthSecondMilliseconds = 0;
+    }
+
+    HlCurrentMillisecond += 1;
+    if (HlCurrentMillisecond == 1000) {
+        HlCurrentMillisecond = 0;
+        HlCurrentSecond += 1;
+        if (HlCurrentSecond == 60) {
+            HlCurrentSecond = 0;
+            HlCurrentMinute += 1;
+            if (HlCurrentMinute == 60) {
+                HlCurrentMinute = 0;
+                HlCurrentHour += 1;
+                if (HlCurrentHour == 24) {
+                    HlCurrentHour = 0;
+                }
+            }
+        }
+    }
+
+    return;
+}
 
 VOID
 HlInitializeUart (
@@ -180,8 +247,6 @@ Return Value:
     return HlReadIo(UART0_DATA);
 }
 
-#if 1
-
 UCHAR
 HlSpiReadWriteByte (
     INT Byte
@@ -214,79 +279,6 @@ Return Value:
     return HlReadIo(SPI_DATA);
 }
 
-#else
-
-#define SPI_MOSI (1 << 3)
-#define SPI_MISO (1 << 4)
-#define SPI_CLOCK (1 << 5)
-
-char SpiString[] PROGMEM = "SPI ";
-char SpiDoneString[] PROGMEM = "Done\r\n";
-
-UCHAR
-HlSpiReadWriteByte (
-    INT Byte
-    )
-
-/*++
-
-Routine Description:
-
-    This routine writes a byte out to the SPI. It also simultaneously read a
-    byte in from the SPI. Think of the SPI bus as a big conveyor belt.
-
-Arguments:
-
-    Byte - Supplies the byte to write.
-
-Return Value:
-
-    Returns the byte read.
-
---*/
-
-{
-
-    INT Index;
-    UCHAR PortB;
-    UCHAR PortBIn;
-    UCHAR ReadByte;
-
-    ReadByte = 0;
-    PortB = HlReadIo(PORTB) & (~SPI_CLOCK);
-//    HlPrintString(SpiString);
-    for (Index = 0; Index < BITS_PER_BYTE; Index += 1) {
-        if ((Byte & (1 << (7 - Index))) != 0) {
-            PortB |= SPI_MOSI;
-
-        } else {
-            PortB &= ~SPI_MOSI;
-        }
-
-        HlStall(2);
-        HlWriteIo(PORTB, PortB);
-        HlStall(2);
-        HlWriteIo(PORTB, PortB | SPI_CLOCK);
-        //HlPrintHexInteger(Index);
-        HlStall(2);
-        PortBIn = HlReadIo(PORTB_INPUT);
-        //HlPrintHexInteger(PortBIn);
-        if ((PortBIn & SPI_MISO) != 0) {
-            ReadByte |= 1;
-        }
-
-        if (Index != BITS_PER_BYTE - 1) {
-            ReadByte <<= 1;
-        }
-    }
-
-//    HlPrintString(SpiDoneString);
-    HlWriteIo(PORTB, PortB);
-    return ReadByte;
-}
-
-#endif
-
 VOID
 HlStall (
     ULONG Milliseconds
@@ -310,47 +302,50 @@ Return Value:
 
 {
 
-    ULONG CurrentCount1;
-    ULONG CurrentCount2;
-    ULONG EndCount;
+    volatile INT CurrentTime;
+    volatile INT CurrentTime2;
+    INT PreviousTime;
+    ULONG TimePassed;
 
     //
-    // Get the current time and add the desired stall time to determine the end
-    // time. Two back to back reads must be done to ensure that the global
-    // read was not torn by an interrupt. The global must be marked as
-    // volatile so the compiler can't play games with caching the first
-    // global read and using it for the second read.
+    // Read the current time into the previous time to snap a start time.
     //
 
     do {
-        CurrentCount1 = HlRawMilliseconds;
-        CurrentCount2 = HlRawMilliseconds;
-    } while (CurrentCount1 != CurrentCount2);
+        CurrentTime = HlCurrentMillisecond;
+        CurrentTime2 = HlCurrentMillisecond;
 
-    EndCount = CurrentCount1 + Milliseconds;
+    } while (CurrentTime != CurrentTime2);
 
-    //
-    // If the stall involves a rollover then wait for the counter to roll over.
-    //
+    PreviousTime = CurrentTime;
+    TimePassed = 0;
+    while (TimePassed < Milliseconds) {
 
-    if (EndCount < CurrentCount1) {
-        while (CurrentCount1 > EndCount) {
-            do {
-                CurrentCount1 = HlRawMilliseconds;
-                CurrentCount2 = HlRawMilliseconds;
-            } while (CurrentCount1 != CurrentCount2);
-        }
-    }
+        //
+        // Read the current time.
+        //
 
-    //
-    // Wait for the current time to catch up to the end time.
-    //
-
-    while (CurrentCount1 < EndCount) {
         do {
-            CurrentCount1 = HlRawMilliseconds;
-            CurrentCount2 = HlRawMilliseconds;
-        } while (CurrentCount1 != CurrentCount2);
+            CurrentTime = HlCurrentMillisecond;
+            CurrentTime2 = HlCurrentMillisecond;
+
+        } while (CurrentTime != CurrentTime2);
+
+        //
+        // If it is different than the previous time, add the difference,
+        // watching out for rollovers.
+        //
+
+        if (CurrentTime != PreviousTime) {
+            if (CurrentTime >= PreviousTime) {
+                TimePassed += CurrentTime - PreviousTime;
+
+            } else {
+                TimePassed += CurrentTime + 1000 - PreviousTime;
+            }
+
+            PreviousTime = CurrentTime;
+        }
     }
 
     return;
@@ -358,7 +353,7 @@ Return Value:
 
 VOID
 HlWriteEepromByte (
-    USHORT Address,
+    PVOID Address,
     UCHAR Byte
     )
 
@@ -397,8 +392,8 @@ Return Value:
     // Set up the address and data registers.
     //
 
-    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)(Address >> 8));
-    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)Address);
+    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)((INT)Address >> 8));
+    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)(INT)Address);
     HlWriteIo(EEPROM_DATA, Byte);
 
     //
@@ -418,7 +413,7 @@ Return Value:
 
 VOID
 HlWriteEepromWord (
-    USHORT Address,
+    PVOID Address,
     USHORT Value
     )
 
@@ -450,7 +445,7 @@ Return Value:
 
 UCHAR
 HlReadEepromByte (
-    UCHAR Address
+    PVOID Address
     )
 
 /*++
@@ -486,8 +481,8 @@ Return Value:
     // Set up the address register.
     //
 
-    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)(Address >> 8));
-    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)Address);
+    HlWriteIo(EEPROM_ADDRESS_HIGH, (UCHAR)((INT)Address >> 8));
+    HlWriteIo(EEPROM_ADDRESS_LOW, (UCHAR)(INT)Address);
 
     //
     // Execute the EEPROM read.
@@ -505,7 +500,7 @@ Return Value:
 
 USHORT
 HlReadEepromWord (
-    UCHAR Address
+    PVOID Address
     )
 
 /*++

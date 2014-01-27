@@ -28,6 +28,7 @@ Environment:
 #include "atmega8.h"
 #include "comlib.h"
 #include "rfm22.h"
+#include "airproto.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -59,7 +60,12 @@ Environment:
 // Define bits off of port C.
 //
 
+#define PORTC_RED (1 << 0)
+#define PORTC_YELLOW (1 << 1)
+#define PORTC_GREEN (1 << 2)
 #define PORTC_LINK_LED (1 << 3)
+
+#define PORTC_SIGNAL_MASK (PORTC_RED | PORTC_YELLOW | PORTC_GREEN)
 
 //
 // Define bits off of port D.
@@ -72,15 +78,13 @@ Environment:
 // Define port configurations.
 //
 
-/*#define PORTB_DATA_DIRECTION_VALUE \
-    (PORTB_RF_SELECT | SPI_SELECT | (1 << 1) | (1 << 2))*/
-
 #define PORTB_DATA_DIRECTION_VALUE \
     (PORTB_RF_SELECT | SPI_SELECT | (1 << 1) | (1 << 2) | SPI_MOSI | SPI_CLOCK)
 
 #define PORTB_INITIAL_VALUE (PORTB_RF_SELECT)
 #define PORTC_DATA_DIRECTION_VALUE \
-    (PORTC_LINK_LED | (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4) | (1 << 5))
+    (PORTC_LINK_LED | PORTC_RED | PORTC_YELLOW | PORTC_GREEN | (1 << 4) | \
+     (1 << 5))
 
 #define PORTD_DATA_DIRECTION_VALUE \
     (PORTD_RF_SHUTDOWN | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6))
@@ -101,6 +105,21 @@ Environment:
 
 char MyString[] PROGMEM = "Hello world\r\n";
 char SendingString[] PROGMEM = ".";
+char NewlineString[] PROGMEM = "\r\n";
+
+//
+// Store the current value of the signal outputs.
+//
+
+UCHAR KeSignalOutputs;
+
+//
+// Store the blink timer.
+//
+
+UCHAR KeBlinkTimer;
+ULONG KeLastTenthSeconds;
+UCHAR KeLinkBlink;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -129,10 +148,21 @@ Return Value:
 
 {
 
+    //CHAR Buffer[50];
+    //INT ByteIndex;
+    //INT Length;
+    UCHAR PacketReceived;
+    UCHAR PortC;
     USHORT TickCount;
     UCHAR Value;
 
-    HlRawMilliseconds = 0;
+    KeSignalOutputs = 0;
+    HlTenthSeconds = 0;
+    HlTenthSecondMilliseconds = 0;
+    HlCurrentMillisecond = 0;
+    HlCurrentSecond = 0;
+    HlCurrentMinute = 0;
+    HlCurrentHour = 0;
 
     //
     // Set up the I/O ports to the proper directions.
@@ -167,24 +197,52 @@ Return Value:
 
     HlWriteIo(SPI_CONTROL, Value);
     HlInitializeUart(PROCESSOR_HZ);
+    HlPrintString(MyString);
     RfInitialize();
+    RfEnterReceiveMode();
     while (TRUE) {
-        HlPrintString(SendingString);
-        RfTransmit("0123456789ABCDEF", 16);
-        HlStall(1000);
+        //HlPrintString(SendingString);
+        //HlStall(1000);
+        if ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) == 0) {
+            //HlPrintString(SendingString);
+            PacketReceived = AirNonMasterProcessPacket();
+            if (PacketReceived != FALSE) {
+                KeLinkBlink = 4;
+                PortC = HlReadIo(PORTC) | PORTC_LINK_LED;
+                HlWriteIo(PORTC, PortC);
+            }
+
+            /*for (ByteIndex = 0; ByteIndex < sizeof(Buffer); ByteIndex += 1) {
+                Buffer[ByteIndex] = 0xAB;
+            }
+
+            Length = sizeof(Buffer);
+            RfReceive(Buffer, &Length);
+            for (ByteIndex = 0; ByteIndex < Length; ByteIndex += 1) {
+                HlPrintHexInteger(Buffer[ByteIndex]);
+            }
+
+            RfResetReceive();*/
+            //HlPrintString(NewlineString);
+        }
+
+        HlUpdateIo();
     }
 
     return 0;
 }
 
-ISR(TIMER1_COMPARE_A_VECTOR, ISR_BLOCK)
+VOID
+HlUpdateIo (
+    VOID
+    )
 
 /*++
 
 Routine Description:
 
-    This routine implements the periodic timer interrupt service routine
-    function. This ISR leaves interrupts disabled the entire time.
+    This routine shifts the next column of LED outputs out onto the shift
+    registers.
 
 Arguments:
 
@@ -198,26 +256,79 @@ Return Value:
 
 {
 
+    UCHAR Delta;
+    UCHAR PortC;
+    volatile ULONG TenthSeconds;
+
+    do {
+        TenthSeconds = HlTenthSeconds;
+
+    } while (TenthSeconds != HlTenthSeconds);
+
+    if (KeLastTenthSeconds == TenthSeconds) {
+        return;
+    }
+
+    Delta = TenthSeconds - KeLastTenthSeconds;
+    KeBlinkTimer += Delta;
+    while (KeBlinkTimer >= 10) {
+        KeBlinkTimer -= 10;
+    }
+
+    KeLastTenthSeconds = TenthSeconds;
+
     //
-    // Update the current time.
+    // If the outputs should blink, then keep everything on for the first half
+    // of each second, and off for the second half.
     //
 
-    HlRawMilliseconds += 1;
+    if ((KeSignalOutputs & SIGNAL_OUT_BLINK) != 0) {
+        PortC = HlReadIo(PORTC);
+        PortC &= ~PORTC_SIGNAL_MASK;
+        if (KeBlinkTimer < 5) {
+            PortC |= KeSignalOutputs & PORTC_SIGNAL_MASK;
+        }
+
+        HlWriteIo(PORTC, PortC);
+    }
+
+    //
+    // If the link timer is on, count it down until it hits zero, then turn the
+    // LED off.
+    //
+
+    if (KeLinkBlink != 0) {
+        if (Delta >= KeLinkBlink) {
+            KeLinkBlink = 0;
+
+        } else {
+            KeLinkBlink -= Delta;
+        }
+
+        if (KeLinkBlink == 0) {
+            PortC = HlReadIo(PORTC);
+            PortC &= ~PORTC_LINK_LED;
+            HlWriteIo(PORTC, PortC);
+        }
+    }
+
     return;
 }
 
-ISR(SPI_VECTOR, ISR_BLOCK)
+VOID
+KeSetOutputs (
+    UCHAR Value
+    )
 
 /*++
 
 Routine Description:
 
-    This routine implements the SPI interrupt service routine.
-    This ISR leaves interrupts disabled the entire time.
+    This routine sets the current value of the signal.
 
 Arguments:
 
-    None.
+    Value - Supplies the signal value to set.
 
 Return Value:
 
@@ -227,11 +338,26 @@ Return Value:
 
 {
 
-    /*KeSpiBuffer[KeSpiBufferNextEmptyIndex] = HlReadIo(SPI_DATA);
-    KeSpiBufferNextEmptyIndex += 1;
-    if (KeSpiBufferNextEmptyIndex == SPI_BUFFER_LENGTH) {
-        KeSpiBufferNextEmptyIndex = 0;
-    }*/
+    UCHAR PortC;
+
+    if (Value != KeSignalOutputs) {
+
+        //
+        // If the blinky bit just changed, reset the blink timer so that it
+        // starts on and synchronizes with other devices.
+        //
+
+        if (((Value ^ KeSignalOutputs) & SIGNAL_OUT_BLINK) != 0) {
+            KeBlinkTimer = 0;
+        }
+
+        HlPrintHexInteger(Value);
+        KeSignalOutputs = Value;
+        PortC = HlReadIo(PORTC);
+        PortC &= ~PORTC_SIGNAL_MASK;
+        PortC |= KeSignalOutputs & PORTC_SIGNAL_MASK;
+        HlWriteIo(PORTC, PortC);
+    }
 
     return;
 }

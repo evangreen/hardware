@@ -193,7 +193,7 @@ Return Value:
     return;
 }
 
-VOID
+UCHAR
 KeUpdateController (
     ULONG CurrentTime
     )
@@ -210,7 +210,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE if the controller's time advanced at all.
+
+    FALSE if time did not advance.
 
 --*/
 
@@ -218,15 +220,21 @@ Return Value:
 
     ULONG Delta;
     ULONG Tick;
+    UCHAR TimeAdvanced;
 
+    TimeAdvanced = FALSE;
     Delta = CurrentTime - KeController.Time;
     for (Tick = 0; Tick < Delta; Tick += 1) {
         KepTimeTick();
     }
 
-    KepUpdateOutput();
-    KeController.Time = CurrentTime;
-    return;
+    if (Delta != 0) {
+        TimeAdvanced = TRUE;
+        KepUpdateOutput();
+        KeController.Time = CurrentTime;
+    }
+
+    return TimeAdvanced;
 }
 
 VOID
@@ -331,7 +339,7 @@ Return Value:
     // Potentially turn vehicle detector actuations into vehicle calls.
     //
 
-    if (KeController.VehicleDetectorChange != 0) {
+    if (KeController.VehicleDetector != 0) {
         for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
             if ((KeController.VehicleDetector & (1 << Phase)) != 0) {
 
@@ -354,15 +362,13 @@ Return Value:
                 KeController.Output.VehicleCall &= ~(1 << Phase);
             }
         }
-
-        KeController.VehicleDetectorChange = 0;
     }
 
     //
     // Potentially turn ped detector actuations into ped calls.
     //
 
-    if (KeController.PedDetectorChange != 0) {
+    if (KeController.PedDetector != 0) {
         for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
             if ((KeController.PedDetector & (1 << Phase)) != 0) {
 
@@ -380,8 +386,6 @@ Return Value:
                 }
             }
         }
-
-        KeController.PedDetectorChange = 0;
     }
 
     //
@@ -574,11 +578,9 @@ Return Value:
     // flashing logic out.
     //
 
-    if ((((UCHAR)KeController.Time) % 10) < 5) {
-        KeController.Flags &= ~CONTROLLER_FLASH_STATE;
-
-    } else {
-        KeController.Flags |= CONTROLLER_FLASH_STATE;
+    KeController.FlashTimer += 1;
+    if (KeController.FlashTimer == 10) {
+        KeController.FlashTimer = 0;
     }
 
     //
@@ -593,16 +595,14 @@ Return Value:
         }
 
         Phase = Ring->Phase - 1;
-        if (((KeController.VehicleDetectorChange & (1 << Phase)) != 0) ||
-            ((KeController.VehicleDetector & (1 << Phase)) != 0)) {
-
+        if ((KeController.VehicleDetector & (1 << Phase)) != 0) {
             if ((Ring->Interval == IntervalMinGreen) ||
                 (Ring->Interval == IntervalMaxI) ||
                 (Ring->Interval == IntervalMaxII) ||
                 (Ring->Interval == IntervalPreMaxRest)) {
 
                 Ring->PassageTimer = Ring->ReducedPassage;
-                KeController.Flags |= CONTROLLER_UPDATE_TIMERS;
+                //KeController.Flags |= CONTROLLER_UPDATE_TIMERS;
             }
         }
     }
@@ -620,7 +620,6 @@ Return Value:
         if (((KeController.VehicleDetector & (1 << Phase)) != 0) &&
             ((KeController.VehicleDetectorChange & (1 << Phase)) != 0)) {
 
-            KeController.VehicleDetectorChange &= ~(1 << Phase);
             if ((KeController.VariableInitial[Phase] !=
                  VARIABLE_INITIAL_DISABLED) &&
                 (KeController.VariableInitial[Phase] !=
@@ -640,6 +639,8 @@ Return Value:
 
     KepHandleCallToNonActuated();
     KeController.InputsChange = 0;
+    KeController.VehicleDetectorChange = 0;
+    KeController.PedDetectorChange = 0;
     return;
 }
 
@@ -1127,8 +1128,9 @@ Return Value:
 
         } else {
             NextPhase = KepGetCallOnSide(RingIndex, FALSE);
-            if ((NextPhase > Ring->Phase) ||
-                (KepGetCallOnSide(RingIndex, TRUE) == 0)) {
+            if ((NextPhase != 0) &&
+                ((NextPhase > Ring->Phase) ||
+                 (KepGetCallOnSide(RingIndex, TRUE) == 0))) {
 
                 Ring->NextPhase = NextPhase;
                 KeController.Flags |= CONTROLLER_UPDATE;
@@ -1139,6 +1141,10 @@ Return Value:
                 KepAttemptBarrierClear();
                 return TRUE;
             }
+
+            ASSERT(NextPhase == 0);
+
+            return FALSE;
         }
 
         break;
@@ -1177,7 +1183,6 @@ Return Value:
     case BarrierCrossExecuting:
         Ring->NextPhase = KepGetCallOnSide(RingIndex, 0);
         KepAttemptBarrierCross();
-        KeController.Flags |= CONTROLLER_UPDATE;
         return TRUE;
 
     //
@@ -1803,6 +1808,7 @@ Return Value:
         Ring = &(KeController.Ring[RingIndex]);
         if (Ring->Phase == 0) {
             Out->RingStatus[RingIndex] = RING_STATUS_REST;
+            Out->Display1[RingIndex] = 0;
             continue;
         }
 
@@ -1812,7 +1818,9 @@ Return Value:
         Out->RingStatus[RingIndex] = 0;
         switch (Ring->Interval) {
         case IntervalMinGreen:
-            Out->RingStatus[RingIndex] = RING_STATUS_MIN_GREEN;
+            Out->RingStatus[RingIndex] = RING_STATUS_MIN_GREEN |
+                                         RING_STATUS_GREEN;
+
             if (KeController.VariableInitial[Phase] ==
                 VARIABLE_INITIAL_IN_PROGRESS) {
 
@@ -1824,8 +1832,9 @@ Return Value:
             break;
 
         case IntervalPreMaxRest:
+            Out->RingStatus[RingIndex] = RING_STATUS_GREEN;
             if (Ring->PedInterval == IntervalInvalid) {
-                Out->RingStatus[RingIndex] = RING_STATUS_REST;
+                Out->RingStatus[RingIndex] |= RING_STATUS_REST;
             }
 
             Out->Red &= ~(1 << Phase);
@@ -1833,14 +1842,14 @@ Return Value:
             break;
 
         case IntervalMaxII:
-            Out->RingStatus[RingIndex] = RING_STATUS_MAX_II;
+            Out->RingStatus[RingIndex] = RING_STATUS_MAX_II | RING_STATUS_GREEN;
 
             //
             // Fall through.
             //
 
         case IntervalMaxI:
-            Out->RingStatus[RingIndex] |= RING_STATUS_MAX;
+            Out->RingStatus[RingIndex] |= RING_STATUS_MAX | RING_STATUS_GREEN;
             Out->Red &= ~(1 << Phase);
             Out->Green |= 1 << Phase;
             break;
@@ -1898,7 +1907,7 @@ Return Value:
 
         case IntervalPedClear:
             Out->RingStatus[RingIndex] |= RING_STATUS_PED_CLEAR;
-            if ((KeController.Flags & CONTROLLER_FLASH_STATE) == 0) {
+            if (KeController.FlashTimer < 5) {
                 Out->DontWalk &= ~(1 << Phase);
             }
 

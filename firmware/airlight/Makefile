@@ -4,11 +4,11 @@
 #
 #   Module Name:
 #
-#       AirRelay firmware
+#       AirLight firmware
 #
 #   Abstract:
 #
-#       This module implements the firmware for the AirRelay board.
+#       This module implements the firmware for the AirLight board.
 #
 #   Author:
 #
@@ -20,10 +20,12 @@
 #
 ################################################################################
 
-BINARY := airrelay
+BINARY := airlight
 
 OBJS := airlight.o      \
+        airproto.o      \
         comlib.o        \
+        cont.o          \
         rfm22.o
 
 MCU = atmega328p
@@ -64,6 +66,9 @@ OBJCOPY = avr-objcopy
 SIZE = avr-size
 endif
 
+HEX_EEPROM_FLAGS = -j .eeprom --set-section-flags=.eeprom="alloc,load" \
+                   --change-section-lma .eeprom=0 --no-change-warnings -O ihex
+
 #
 # VPATH specifies which directories make should look in to find all files.
 # Paths are separated by colons.
@@ -100,10 +105,13 @@ ASOPTIONS = --gstabs+                                           \
 
 .PHONY: prebuild all clean program
 
-all: $(OBJROOT) $(BINROOT) $(BINARY)
+all: $(OBJROOT) $(BINROOT) $(BINARY) $(BINARY).eep
 
 program: all
 	avrdude -c usbtiny -F -p$(MCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0x01:m
+
+program-eeprom: all
+	avrdude -c usbtiny -F -p$(MCU) -U eeprom:w:avrbin\$(BINARY).eep
 
 #
 # The dependencies of the binary object depend on the architecture and type of
@@ -118,8 +126,13 @@ ifeq (avr, $(ARCH))
 ALLOBJS = $(OBJS) $(AVR_OBJS)
 $(BINARY): $(BINARY).elf
 	@cd $(OBJROOT) && $(OBJCOPY) -O binary -R .eeprom -R .fuse -R .lock -R .signature $^ $@
-	@echo Binplacing - $(OBJROOT)/$(BINARY)
-	@cp -f $(OBJROOT)/$(BINARY) $(BINROOT)/
+	@echo Binplacing - $(OBJROOT)/$@
+	@cp -f $(OBJROOT)/$@ $(BINROOT)/
+
+$(BINARY).eep: $(BINARY).elf
+	@cd $(OBJROOT) && $(OBJCOPY) $(HEX_EEPROM_FLAGS) $^ $@
+	@echo Binplacing - $(OBJROOT)/$@
+	@cp -f $(OBJROOT)/$@ $(BINROOT)/
 
 $(BINARY).elf: $(ALLOBJS)
 	@echo Linking - $@
