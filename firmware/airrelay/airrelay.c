@@ -103,10 +103,6 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-char MyString[] PROGMEM = "Hello world\r\n";
-char SendingString[] PROGMEM = ".";
-char NewlineString[] PROGMEM = "\r\n";
-
 //
 // Store the current value of the signal outputs.
 //
@@ -148,9 +144,6 @@ Return Value:
 
 {
 
-    //CHAR Buffer[50];
-    //INT ByteIndex;
-    //INT Length;
     UCHAR PacketReceived;
     UCHAR PortC;
     USHORT TickCount;
@@ -197,33 +190,16 @@ Return Value:
 
     HlWriteIo(SPI_CONTROL, Value);
     HlInitializeUart(PROCESSOR_HZ);
-    HlPrintString(MyString);
     RfInitialize();
     RfEnterReceiveMode();
     while (TRUE) {
-        //HlPrintString(SendingString);
-        //HlStall(1000);
         if ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) == 0) {
-            //HlPrintString(SendingString);
             PacketReceived = AirNonMasterProcessPacket();
             if (PacketReceived != FALSE) {
                 KeLinkBlink = 4;
                 PortC = HlReadIo(PORTC) | PORTC_LINK_LED;
                 HlWriteIo(PORTC, PortC);
             }
-
-            /*for (ByteIndex = 0; ByteIndex < sizeof(Buffer); ByteIndex += 1) {
-                Buffer[ByteIndex] = 0xAB;
-            }
-
-            Length = sizeof(Buffer);
-            RfReceive(Buffer, &Length);
-            for (ByteIndex = 0; ByteIndex < Length; ByteIndex += 1) {
-                HlPrintHexInteger(Buffer[ByteIndex]);
-            }
-
-            RfResetReceive();*/
-            //HlPrintString(NewlineString);
         }
 
         HlUpdateIo();

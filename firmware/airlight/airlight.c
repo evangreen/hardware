@@ -72,7 +72,7 @@ Environment:
 // Define bits off of port C.
 //
 
-#define PORTC_SLAVE_OUT (1 << 2)
+#define PORTC_SLAVE_OUT (1 << 1)
 
 //
 // Define bits off of port D.
@@ -92,7 +92,7 @@ Environment:
 
 #define PORTB_INITIAL_VALUE (PORTB_RF_SELECT)
 #define PORTC_DATA_DIRECTION_VALUE \
-    ((1 << 0) | (1 << 1) | PORTC_SLAVE_OUT| (1 << 4) | (1 << 5))
+    ((1 << 0) | PORTC_SLAVE_OUT | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5))
 
 #define PORTD_DATA_DIRECTION_VALUE \
     ((1 << 3) | (1 << 4) | PORTD_INPUTS_DISABLE | PORTD_LOAD_INPUTS | \
@@ -366,13 +366,9 @@ Return Value:
 
 {
 
-    //CHAR Buffer[17];
-    //INT ByteIndex;
-    //INT Column;
-    //CHAR DoneUpdate;
-    //INT Mask;
     INT RisingEdge;
     USHORT TickCount;
+    volatile ULONG Time;
     UCHAR Updated;
     UCHAR Value;
 
@@ -422,50 +418,14 @@ Return Value:
     KepLoadNonVolatileData();
     RfInitialize();
     RfEnterReceiveMode();
-    KeInitializeController(HlTenthSeconds);
+    do {
+        Time = HlTenthSeconds;
+
+    } while (Time != HlTenthSeconds);
+
+    KeInitializeController(Time);
     while (TRUE) {
         HlUpdateIo();
-        /*if ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) == 0) {
-            HlPrintString(SendingString);
-            for (ByteIndex = 0; ByteIndex < sizeof(Buffer); ByteIndex += 1) {
-                Buffer[ByteIndex] = 0xAB;
-            }
-
-            RfReceive(Buffer, sizeof(Buffer));
-            for (ByteIndex = 0; ByteIndex < sizeof(Buffer); ByteIndex += 1) {
-                HlPrintHexInteger(Buffer[ByteIndex]);
-            }
-
-            RfResetReceive();
-            HlPrintString(NewlineString);
-        }*/
-
-        /*if ((HlRawMilliseconds & 0xFF) == 0) {
-            if (DoneUpdate == FALSE) {
-                if (Mask == 0x8000) {
-                    HlLedOutputs[Column] = 0;
-                    Mask = 0x01;
-                    if (Column == LedColumnCount - 1) {
-                        Column = 0;
-
-                    } else {
-                        Column += 1;
-                    }
-
-                } else {
-                    Mask <<= 1;
-                }
-
-                HlLedOutputs[Column] = Mask;
-                HlLedOutputs[0] = HlInputs;
-            }
-
-            DoneUpdate = TRUE;
-
-        } else {
-            DoneUpdate = FALSE;
-        }*/
-
         if ((HlReadIo(PORTD_INPUT) & PORTD_RF_IRQ) == 0) {
             AirMasterProcessPacket();
         }
@@ -485,7 +445,12 @@ Return Value:
             HlInputsChange = 0;
         }
 
-        Updated = KeUpdateController(HlTenthSeconds);
+        do {
+            Time = HlTenthSeconds;
+
+        } while (Time != HlTenthSeconds);
+
+        Updated = KeUpdateController(Time);
         if (Updated != FALSE) {
             HlSetLedsForController();
             if ((KeController.Flags &
@@ -1299,6 +1264,7 @@ Return Value:
     UCHAR Minute;
     UINT LedValue;
     UCHAR LongClock;
+    volatile ULONG Time;
     UCHAR Second;
 
     HlInputsChange = 0;
@@ -1306,7 +1272,12 @@ Return Value:
     LongClock = FALSE;
     KepClearLeds();
     AirSendRawOutput(0, 0, 0, 0, 0);
-    ClockStart = HlTenthSeconds;
+    do {
+        Time = HlTenthSeconds;
+
+    } while (Time != HlTenthSeconds);
+
+    ClockStart = Time;
     while (TRUE) {
         Hour = HlCurrentHour;
         Minute = HlCurrentMinute;
@@ -1318,7 +1289,12 @@ Return Value:
             Hour -= 12;
         }
 
-        if (HlTenthSeconds - ClockStart > 300) {
+        do {
+            Time = HlTenthSeconds;
+
+        } while (Time != HlTenthSeconds);
+
+        if (Time - ClockStart > 300) {
             LongClock = TRUE;
         }
 

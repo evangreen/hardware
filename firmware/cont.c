@@ -471,7 +471,8 @@ Return Value:
 
         if (((Ring->Interval == IntervalMinGreen) ||
              (Ring->Interval == IntervalPreMaxRest)) &&
-            (Ring->MaxTimer == 0)) {
+            (Ring->MaxTimer == 0) &&
+            (Ring->Phase != 0)) {
 
             if ((KepGetCallOnSide(RingIndex, FALSE) != 0) ||
                 (KepGetCallOnSide(RingIndex, TRUE) != 0)) {
@@ -496,7 +497,8 @@ Return Value:
         }
 
         //
-        // Handle interval termination (except for pedestrian an max intervals).
+        // Handle interval termination (except for pedestrian and max
+        // intervals).
         //
 
         if ((Ring->IntervalTimer == 0) &&
@@ -551,24 +553,26 @@ Return Value:
         // smoothly to the "minimum gap" value over "time to reduce" seconds.
         //
 
-        TimeToReduce = KeTimingData[Phase][TimingTimeToReduce];
-        MinGap = KeTimingData[Phase][TimingMinGap];
-        OriginalPassage = KeTimingData[Phase][TimingPassage];
-        if ((TimeToReduce != 0) &&
-            ((KeController.StopTiming & (1 << RingIndex)) == 0)) {
+        if (Ring->Phase != 0) {
+            TimeToReduce = KeTimingData[Phase][TimingTimeToReduce];
+            MinGap = KeTimingData[Phase][TimingMinGap];
+            OriginalPassage = KeTimingData[Phase][TimingPassage];
+            if ((TimeToReduce != 0) &&
+                ((KeController.StopTiming & (1 << RingIndex)) == 0)) {
 
-            if (Ring->BeforeReductionTimer != 0) {
-                Ring->BeforeReductionTimer -= 1;
+                if (Ring->BeforeReductionTimer != 0) {
+                    Ring->BeforeReductionTimer -= 1;
 
-            } else if (Ring->TimeToReduceTimer != 0) {
-                Ring->TimeToReduceTimer -= 1;
-                Ring->ReducedPassage =
-                    ((OriginalPassage * Ring->TimeToReduceTimer) +
-                     (MinGap * (TimeToReduce - Ring->TimeToReduceTimer))) /
-                    TimeToReduce;
+                } else if (Ring->TimeToReduceTimer != 0) {
+                    Ring->TimeToReduceTimer -= 1;
+                    Ring->ReducedPassage =
+                        ((OriginalPassage * Ring->TimeToReduceTimer) +
+                         (MinGap * (TimeToReduce - Ring->TimeToReduceTimer))) /
+                        TimeToReduce;
 
-            } else {
-                Ring->ReducedPassage = MinGap;
+                } else {
+                    Ring->ReducedPassage = MinGap;
+                }
             }
         }
     }
