@@ -1670,12 +1670,16 @@ Return Value:
 {
 
     UCHAR Exit;
+    UCHAR PreviousRed;
+    UCHAR PreviousYellow;
     UCHAR Red;
     INT RisingEdge;
     UCHAR Yellow;
 
     KepClearLeds();
     Exit = FALSE;
+    PreviousRed = 0;
+    PreviousYellow = 0;
     while (TRUE) {
         if (HlCurrentMillisecond < 500) {
             Red = 0x55;
@@ -1690,6 +1694,12 @@ Return Value:
                 Red = 0xAA;
                 Yellow = 0;
             }
+        }
+
+        if ((PreviousRed != Red) || (PreviousYellow != Yellow)) {
+            PreviousRed = Red;
+            PreviousYellow = Yellow;
+            AirSendRawOutput(Red, Yellow, 0, 0, 0);
         }
 
         HlLedOutputs[LedColumnGreenWalkRedYellow] =

@@ -70,14 +70,14 @@ UCHAR AirControllerId = 1;
 // Define the device number of this individual device.
 //
 
-USHORT AirDeviceId = 2;
+USHORT AirDeviceId = 4;
 
 //
 // Define the phase this non-master is bound to.
 //
 
 UCHAR AirDevicePhase = 2;
-UCHAR AirDevicePed = FALSE;
+UCHAR AirDevicePed = TRUE;
 
 //
 // Store the outgoing and incoming packet buffers.
@@ -364,7 +364,7 @@ Return Value:
         break;
 
     case AirlightCommandRawOutput:
-        Mask = 1 << AirDevicePhase;
+        Mask = 1 << (AirDevicePhase - 1);
         Output = 0;
         if (AirDevicePed != FALSE) {
             if ((Packet->RawOutput.DontWalk & Mask) != 0) {
@@ -383,7 +383,6 @@ Return Value:
             if ((Packet->RawOutput.Yellow & Mask) != 0) {
                 Output |= SIGNAL_OUT_YELLOW;
             }
-
 
             if ((Packet->RawOutput.Green & Mask) != 0) {
                 Output |= SIGNAL_OUT_GREEN;

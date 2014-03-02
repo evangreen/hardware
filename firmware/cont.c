@@ -224,6 +224,15 @@ Return Value:
 
     TimeAdvanced = FALSE;
     Delta = CurrentTime - KeController.Time;
+
+    //
+    // Avoid spinning for ages if the controller got suspended for awhile.
+    //
+
+    if (Delta > 10) {
+        Delta = 10;
+    }
+
     for (Tick = 0; Tick < Delta; Tick += 1) {
         KepTimeTick();
     }
