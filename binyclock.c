@@ -227,7 +227,7 @@ extern UCHAR HlFontData5x7[][5] PROGMEM;
 // Stores the current state of the 5x7 display.
 //
 
-volatile UCHAR HlDisplay[5];
+volatile UCHAR HlDisplay[MATRIX_COLUMNS];
 
 //
 // Store the current column being displayed.
@@ -398,7 +398,7 @@ Return Value:
     HlWriteIo(PORTD_DATA_DIRECTION, PORTD_DATA_DIRECTION_VALUE);
 
     //
-    // Enter the main programming loop.
+    // Enter the main program loop.
     //
 
     while (TRUE) {
@@ -481,7 +481,7 @@ Return Value:
     PortDValue = PORTD_OFF_VALUE;
 
     //
-    // Turn on the column bit. Check if the column goes in port C. Flip the
+    // Turn on the column bit. Check if the column goes in port C. Reverse the
     // user orientation of the columns as well.
     //
 
@@ -943,7 +943,7 @@ KeScrollDigit (
 
 Routine Description:
 
-    This routine a single digit in the range of 0-F to the display.
+    This routine scrolls a single digit in the range of 0-F to the display.
 
 Arguments:
 
