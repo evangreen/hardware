@@ -4627,6 +4627,8 @@ This is the mechanical footprint for a #4 phillips button head screw. Use the ke
 <approved hash="115,1,86.36,74.1468,D4,,,,,"/>
 <approved hash="115,1,221.175,107.357,JP6,,,,,"/>
 <approved hash="115,1,233.875,107.357,JP7,,,,,"/>
+<approved hash="115,1,217.763,129.735,JP8,,,,,"/>
+<approved hash="115,1,233.003,129.735,JP9,,,,,"/>
 </errors>
 </schematic>
 </drawing>

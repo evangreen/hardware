@@ -28,8 +28,8 @@
 <layer number="18" name="Vias" color="2" fill="1" visible="yes" active="yes"/>
 <layer number="19" name="Unrouted" color="6" fill="1" visible="yes" active="yes"/>
 <layer number="20" name="Dimension" color="15" fill="1" visible="yes" active="yes"/>
-<layer number="21" name="tPlace" color="7" fill="1" visible="yes" active="yes"/>
-<layer number="22" name="bPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="21" name="tPlace" color="11" fill="1" visible="yes" active="yes"/>
+<layer number="22" name="bPlace" color="11" fill="1" visible="yes" active="yes"/>
 <layer number="23" name="tOrigins" color="15" fill="1" visible="yes" active="yes"/>
 <layer number="24" name="bOrigins" color="15" fill="1" visible="yes" active="yes"/>
 <layer number="25" name="tNames" color="7" fill="1" visible="yes" active="yes"/>
@@ -58,8 +58,8 @@
 <layer number="48" name="Document" color="7" fill="1" visible="yes" active="yes"/>
 <layer number="49" name="Reference" color="7" fill="1" visible="yes" active="yes"/>
 <layer number="50" name="dxf" color="7" fill="1" visible="no" active="no"/>
-<layer number="51" name="tDocu" color="11" fill="1" visible="yes" active="yes"/>
-<layer number="52" name="bDocu" color="11" fill="1" visible="yes" active="yes"/>
+<layer number="51" name="tDocu" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="52" name="bDocu" color="15" fill="1" visible="yes" active="yes"/>
 <layer number="53" name="tGND_GNDA" color="7" fill="9" visible="no" active="no"/>
 <layer number="54" name="bGND_GNDA" color="1" fill="9" visible="no" active="no"/>
 <layer number="56" name="wert" color="7" fill="1" visible="no" active="no"/>
@@ -131,32 +131,32 @@
 <wire x1="137.16" y1="0" x2="137.16" y2="27.94" width="0" layer="20"/>
 <wire x1="137.16" y1="27.94" x2="0" y2="27.94" width="0" layer="20"/>
 <wire x1="0" y1="27.94" x2="0" y2="0" width="0" layer="20"/>
-<text x="54.356" y="18.288" size="1.016" layer="52" font="vector" ratio="17" rot="MR0">CC&lt;&gt;CA</text>
-<text x="101.6" y="9.144" size="1.016" layer="52" font="vector" ratio="17" rot="MR0">CC&lt;&gt;CA</text>
-<text x="74.676" y="22.352" size="1.016" layer="51" font="vector" ratio="17">A0</text>
-<text x="76.962" y="22.352" size="1.016" layer="51" font="vector" ratio="17">1</text>
-<text x="78.74" y="22.352" size="1.016" layer="51" font="vector" ratio="17">2</text>
-<text x="37.846" y="23.368" size="1.016" layer="51" font="vector" ratio="17">+5V</text>
-<text x="42.672" y="16.002" size="1.016" layer="51" font="vector" ratio="17" rot="R90">+5V</text>
-<text x="37.338" y="20.32" size="1.016" layer="51" font="vector" ratio="17" rot="R180">GND</text>
-<text x="41.656" y="15.494" size="1.016" layer="51" font="vector" ratio="17" rot="R270">GND</text>
-<text x="38.1" y="3.81" size="1.016" layer="51" font="vector" ratio="17">SDA</text>
-<text x="137.16" y="10.922" size="1.016" layer="51" font="vector" ratio="17" rot="R180">SDA</text>
-<text x="134.874" y="6.858" size="1.016" layer="51" font="vector" ratio="17" rot="R180">SCL</text>
-<text x="36.83" y="4.826" size="1.016" layer="51" font="vector" ratio="17" rot="R180">SCL</text>
-<text x="0.508" y="8.636" size="1.016" layer="51" font="vector" ratio="17">TX</text>
-<text x="3.302" y="8.636" size="1.016" layer="51" font="vector" ratio="17">RX</text>
-<text x="124.206" y="18.542" size="1.016" layer="51" font="vector" ratio="17">COL3</text>
-<text x="128.524" y="18.542" size="1.016" layer="51" font="vector" ratio="17">2</text>
-<text x="132.08" y="19.05" size="1.016" layer="51" font="vector" ratio="17">1</text>
-<text x="123.952" y="12.192" size="1.016" layer="51" font="vector" ratio="17">ROW4</text>
-<text x="130.302" y="12.7" size="1.016" layer="51" font="vector" ratio="17">3</text>
-<text x="132.08" y="12.7" size="1.016" layer="51" font="vector" ratio="17">2</text>
-<text x="134.62" y="12.7" size="1.016" layer="51" font="vector" ratio="17">1</text>
-<text x="133.858" y="19.05" size="1.016" layer="51" font="vector" ratio="17">GND</text>
-<text x="8.128" y="0.762" size="1.778" layer="51" font="vector" ratio="17">Marty McFly v1 09/2015</text>
-<text x="72.136" y="0.762" size="1.778" layer="51" font="vector" ratio="17">Evan Green</text>
-<text x="112.776" y="0.762" size="1.778" layer="51" font="vector" ratio="17">For Caitlin</text>
+<text x="54.356" y="18.288" size="1.016" layer="22" font="vector" ratio="17" rot="MR0">CC&lt;&gt;CA</text>
+<text x="101.6" y="9.144" size="1.016" layer="22" font="vector" ratio="17" rot="MR0">CC&lt;&gt;CA</text>
+<text x="74.676" y="22.352" size="1.016" layer="21" font="vector" ratio="17">A0</text>
+<text x="76.962" y="22.352" size="1.016" layer="21" font="vector" ratio="17">1</text>
+<text x="78.74" y="22.352" size="1.016" layer="21" font="vector" ratio="17">2</text>
+<text x="37.846" y="23.368" size="1.016" layer="21" font="vector" ratio="17">+5V</text>
+<text x="42.672" y="16.002" size="1.016" layer="21" font="vector" ratio="17" rot="R90">+5V</text>
+<text x="37.338" y="20.32" size="1.016" layer="21" font="vector" ratio="17" rot="R180">GND</text>
+<text x="41.656" y="15.494" size="1.016" layer="21" font="vector" ratio="17" rot="R270">GND</text>
+<text x="38.1" y="3.81" size="1.016" layer="21" font="vector" ratio="17">SDA</text>
+<text x="137.16" y="10.922" size="1.016" layer="21" font="vector" ratio="17" rot="R180">SDA</text>
+<text x="134.874" y="6.858" size="1.016" layer="21" font="vector" ratio="17" rot="R180">SCL</text>
+<text x="36.83" y="4.826" size="1.016" layer="21" font="vector" ratio="17" rot="R180">SCL</text>
+<text x="0.508" y="8.636" size="1.016" layer="21" font="vector" ratio="17">TX</text>
+<text x="3.302" y="8.636" size="1.016" layer="21" font="vector" ratio="17">RX</text>
+<text x="123.952" y="19.05" size="1.016" layer="21" font="vector" ratio="17">COL3</text>
+<text x="129.286" y="19.05" size="1.016" layer="21" font="vector" ratio="17">2</text>
+<text x="132.08" y="19.05" size="1.016" layer="21" font="vector" ratio="17">1</text>
+<text x="124.206" y="12.7" size="1.016" layer="21" font="vector" ratio="17">ROW4</text>
+<text x="129.54" y="12.7" size="1.016" layer="21" font="vector" ratio="17">3</text>
+<text x="132.08" y="12.7" size="1.016" layer="21" font="vector" ratio="17">2</text>
+<text x="134.62" y="12.7" size="1.016" layer="21" font="vector" ratio="17">1</text>
+<text x="133.858" y="19.05" size="1.016" layer="21" font="vector" ratio="17">GND</text>
+<text x="8.128" y="0.762" size="1.778" layer="21" font="vector" ratio="17">Marty McFly v1 09/2015</text>
+<text x="72.136" y="0.762" size="1.778" layer="21" font="vector" ratio="17">Evan Green</text>
+<text x="112.776" y="0.762" size="1.778" layer="21" font="vector" ratio="17">For Caitlin</text>
 </plain>
 <libraries>
 <library name="SparkFun">
