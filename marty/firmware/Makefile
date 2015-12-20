@@ -24,9 +24,10 @@
 BINARY := marty
 
 OBJS1 := marty.o         \
+         mtime.o         \
 
-MCU = atmega32u4
-PROGMCU = atmega32u4
+MCU = atmega328p
+PROGMCU = atmega328p
 F_CPU = 16000000
 
 #
@@ -99,14 +100,19 @@ ASOPTIONS = -mmcu=$(MCU) -Os -c -x assembler-with-cpp -D__ASSEMBLY__
 # have files associated with them.
 #
 
-.PHONY: prebuild all clean program
+.PHONY: prebuild all clean program test
 
 all: $(OBJROOT) $(BINROOT) $(BINARY)
 
-program: wipe all
+program: all
 	@echo Programming Marty McFly
-	: avrdude -c usbtiny -p$(PROGMCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
-	avrdude -c avr109 -P COM3 -p$(PROGMCU) -U flash:w:avrbin\$(BINARY)
+	avrdude -c usbtiny -p$(PROGMCU) -U flash:w:avrbin\$(BINARY) -U lfuse:w:0xff:m -U hfuse:w:0xdf:m -U efuse:w:0x07:m
+	: avrdude -c avr109 -P COM3 -p$(PROGMCU) -U flash:w:avrbin\$(BINARY)
+
+test: $(BINROOT)/mtest.exe
+
+$(BINROOT)/mtest.exe: test.c mtime.o
+	gcc -o $@ $^
 
 #
 # The dependencies of the binary object depend on the architecture and type of
@@ -152,7 +158,7 @@ endif
 $(BINROOT):
 	-@mkdir $(BINROOT) > nul
 
-wipe:
+clean:
 ifeq ($(ARCH),avr)
 	-rm -r -f $(OBJROOT)
 	-rm -r -f $(BINROOT)

@@ -1,0 +1,7 @@
+Errata for board v1:
+
+The 6-pin ICSP header is too close to the LED, so headers won't fit over it and
+jumper pins must be used. For v2, move the ICSP header.
+
+A0, 2 silkscreens and positions are backwards, since ROW0 = A2, ROW1 = A1, and
+ROW2 = A0. For v2, move those around.
