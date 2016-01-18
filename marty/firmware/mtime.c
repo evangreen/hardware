@@ -95,8 +95,8 @@ int16_t MonthDays[2][MONTHS_PER_YEAR] PROGMEM = {
     {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335},
 };
 
-DATE CurrentDate = {2015, 0, 0};
-DATE DestinationDate = {2015, 0, 0};
+DATE CurrentDate = {2016, 10, 0};
+DATE DestinationDate = {1989, 10, 0};
 DATE Delta;
 DAYLIGHT_DATA CurrentDaylight;
 DAYLIGHT_DATA DestinationDaylight;

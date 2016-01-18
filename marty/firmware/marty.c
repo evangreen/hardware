@@ -49,6 +49,10 @@ Environment:
 
 #define REPEAT_TIMER_OFF 64
 
+#define DESTINATION_TIME_ADDRESS (HT16K33_SLAVE_ADDRESS + 8)
+#define CURRENT_TIME_ADDRESS HT16K33_SLAVE_ADDRESS
+#define DELTA_TIME_ADDRESS (HT16K33_SLAVE_ADDRESS + 4)
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -76,6 +80,11 @@ typedef enum _KEYPAD_KEY {
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+void
+ShowGreeting (
+    void
+    );
 
 void
 RedrawCalendarDisplays (
@@ -245,6 +254,13 @@ int8_t DisplaySegments[19] PROGMEM = {
     0x7F, 0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71, 0x00, 0x40
 };
 
+uint8_t Greeting[2][16] PROGMEM = {
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x54, 0x04, 0x38, 0x78, 0x04, 0x77, 0x39,
+     0x00, 0x50, 0x5C, 0x71},
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x54, 0x77, 0x3E, 0x79, 0x79, 0x3E, 0x5C, 0x38},
+};
+
 //
 // Keep track of 1/64th second units.
 //
@@ -285,13 +301,11 @@ Return Value:
 
 {
 
-//    uint8_t Count[DISPLAY_SIZE];
     uint8_t Display[HT16K33_DISPLAY_SIZE];
     uint8_t Index;
     int8_t PreviousTicks;
     int8_t RedrawDestination;
     DISPLAY_CONVERSION TimeConversion;
-//    uint8_t Value;
 
     Timer1Initialize();
     UartInitialize();
@@ -299,18 +313,16 @@ Return Value:
     DebugPrintString(BootString);
     _delay_ms(100);
     DebugPrintInt('T', 0xFF, 1);
-for (Index = 0; Index < HT16K33_DISPLAY_SIZE; Index += 1) {
-        Display[Index] = 0xFF;
-}
-//Value = 1;
+    for (Index = 0; Index < HT16K33_DISPLAY_SIZE; Index += 1) {
+            Display[Index] = 0xFF;
+    }
+
     for (Index = HT16K33_SLAVE_ADDRESS;
          Index < HT16K33_SLAVE_ADDRESS + 12;
          Index += 2) {
 
         Ht16k33Initialize(Index);
-//Display[4] = (1 << Value) - 1;
-//Value += 1;
-Ht16k33SetDisplay(Index, Display);
+        Ht16k33SetDisplay(Index, Display);
     }
 
     //
@@ -325,21 +337,8 @@ Ht16k33SetDisplay(Index, Display);
 
     ExternalInterruptInitialize();
     _delay_ms(5000);
+    ShowGreeting();
     sei();
-/*    for (Index = 0; Index < HT16K33_DISPLAY_SIZE; Index += 1) {
-        Display[Index] = 0xFF;
-    }
-
-    Ht16k33SetDisplay(HT16K33_SLAVE_ADDRESS, Display);
-    for (Index = 0; Index < HT16K33_DISPLAY_SIZE; Index += 1) {
-        DebugPrintInt(0, Display[Index], 0);
-    }
-
-    for (Index = 0; Index < DISPLAY_SIZE; Index += 1) {
-        Count[Index] = 0;
-    }
-
-    Value = 0;*/
     RedrawCalendarDisplays(TRUE, DisplayConversionTime);
     PreviousTicks = CurrentSeconds64;
     while (1) {
@@ -359,7 +358,7 @@ Ht16k33SetDisplay(Index, Display);
 
         PreviousTicks = CurrentSeconds64;
         if ((CurrentSeconds64 == 0) || (CurrentSeconds64 == 32)) {
-            RedrawDestination = TRUE; //FALSE;
+            RedrawDestination = FALSE;
             if (CurrentDate.Second == 0) {
                 RedrawDestination = TRUE;
             }
@@ -371,29 +370,6 @@ Ht16k33SetDisplay(Index, Display);
 
             RedrawCalendarDisplays(RedrawDestination, TimeConversion);
         }
-
-/*        _delay_ms(250);
-        Index = 2;
-        while (Index < DISPLAY_SIZE) {
-            Count[Index] += 1;
-            if (Count[Index] < 10) {
-                break;
-            }
-
-            Count[Index] = 0;
-            Index += 1;
-        }
-
-        //for (Index = HT16K33_DISPLAY_SIZE - 1; Index > 0; Index -= 1) {
-        //    Display[Index] = Display[Index - 1];
-        //}
-
-        ConvertToDisplaySegments(Count, Display, TRUE);
-Display[14] = pgm_read_byte_near(&(DisplaySegments[Value & 0xF]));
-        Ht16k33SetDisplay(HT16K33_SLAVE_ADDRESS, Display);
-        DebugPrintInt(0, Value, 0);
-        Value += 1;
-        AdvanceTime(1);*/
     }
 
     return 0;
@@ -469,6 +445,55 @@ Return Value:
 //
 
 void
+ShowGreeting (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine displays the startup greeting.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    int8_t Index;
+    uint8_t Segments[HT16K33_DISPLAY_SIZE * 2];
+
+    ClearDisplay();
+    for (Index = 0; Index < HT16K33_DISPLAY_SIZE; Index += 1) {
+        Segments[Index * 2] = pgm_read_byte_near(&(Greeting[0][Index]));
+        Segments[(Index * 2) + 1] = 0;
+    }
+
+    Ht16k33SetDisplay(DESTINATION_TIME_ADDRESS, Segments);
+    Ht16k33SetDisplay(DESTINATION_TIME_ADDRESS + 2,
+                      &(Segments[HT16K33_DISPLAY_SIZE]));
+
+    for (Index = 0; Index < HT16K33_DISPLAY_SIZE; Index += 1) {
+        Segments[Index * 2] = pgm_read_byte_near(&(Greeting[1][Index]));
+    }
+
+    Ht16k33SetDisplay(CURRENT_TIME_ADDRESS, Segments);
+    Ht16k33SetDisplay(CURRENT_TIME_ADDRESS + 2,
+                      &(Segments[HT16K33_DISPLAY_SIZE]));
+
+    _delay_ms(5000);
+    ClearDisplay();
+    return;
+}
+
+void
 RedrawCalendarDisplays (
     uint8_t RedrawDestination,
     DISPLAY_CONVERSION TimeConversion
@@ -497,9 +522,14 @@ Return Value:
 {
 
     if (RedrawDestination != FALSE) {
-        UpdateCalendarDisplay(HT16K33_SLAVE_ADDRESS + 8,
+        ConvertToCalendarDate(&DestinationDate,
+                              0,
+                              &DestinationCalendarDate,
+                              &DestinationDaylight);
+
+        UpdateCalendarDisplay(DESTINATION_TIME_ADDRESS,
                               TRUE,
-                              &CurrentCalendarDate, //&DestinationCalendarDate,
+                              &DestinationCalendarDate,
                               TimeConversion,
                               DisplayConversionDate);
     }
@@ -510,9 +540,9 @@ Return Value:
                           TimeConversion,
                           DisplayConversionDate);
 
-    UpdateCalendarDisplay(HT16K33_SLAVE_ADDRESS + 4,
+    UpdateCalendarDisplay(DELTA_TIME_ADDRESS,
                           FALSE,
-                          &CurrentCalendarDate, //&DeltaCalendarDate,
+                          &DeltaCalendarDate,
                           TimeConversion,
                           DisplayConversionDateDelta);
 
@@ -563,16 +593,6 @@ Return Value:
     ConvertToDisplaySegments(Display, Segments, CommonCathode);
     Ht16k33SetDisplay(SlaveAddress, Segments);
     ConvertCalendarDateToDisplay(Date, Display, DateConversion);
-if (SlaveAddress == HT16K33_SLAVE_ADDRESS) {
-    Display[0] = RawInput[0];
-    Display[1] = RawInput[1];
-    Display[2] = RawInput[2];
-    Display[3] = RawInput[3];
-    Display[4] = RawInput[4];
-    Display[5] = RawInput[5];
-    Display[6] = InterruptCount & 0xF;
-    Display[7] = 0;
-}
     ConvertToDisplaySegments(Display, Segments, CommonCathode);
     Ht16k33SetDisplay(SlaveAddress + 2, Segments);
     return;
@@ -698,10 +718,13 @@ Return Value:
 
 {
 
-//    uint8_t Display[DISPLAY_SIZE];
-//    int8_t Index;
+    CALENDAR_DATE Date;
+    int8_t Digit;
+    uint8_t Display[DISPLAY_SIZE * 2];
+    int8_t Index;
     int16_t Key;
-//    uint8_t Segments[HT16K33_DISPLAY_SIZE];
+    uint8_t Segments[HT16K33_DISPLAY_SIZE * 2];
+    uint8_t SlaveAddress;
 
     while (TRUE) {
         MaintainKeypadState();
@@ -722,11 +745,188 @@ Return Value:
 
             break;
 
+        case Keypad3:
+            ShowGreeting();
+            break;
+
+        //
+        // Pressing star allows the user to change the current or destination
+        // time.
+        //
+
+        case KeypadStar:
+
+            //
+            // First set the display to all dashes.
+            //
+
+            ClearDisplay();
+            for (Index = 0; Index < DISPLAY_SIZE * 2; Index += 1) {
+                Display[Index] = DISPLAY_INDEX_DASH;
+            }
+
+            SlaveAddress = CURRENT_TIME_ADDRESS;
+            ConvertToDisplaySegments(Display, Segments, TRUE);
+            ConvertToDisplaySegments(&(Display[DISPLAY_SIZE]),
+                                     &(Segments[HT16K33_DISPLAY_SIZE]),
+                                     TRUE);
+
+            Ht16k33SetDisplay(SlaveAddress, Segments);
+            Ht16k33SetDisplay(SlaveAddress + 2,
+                              &(Segments[HT16K33_DISPLAY_SIZE]));
+
+            Index = (DISPLAY_SIZE * 2) - 1;
+            while (TRUE) {
+                MaintainKeypadState();
+                Key = GetNextKey();
+                if (Key == -1) {
+                    continue;
+                }
+
+                //
+                // Pressing star again toggles between current time,
+                // destination time, or cancelling.
+                //
+
+                if (Key == KeypadStar) {
+                    ClearDisplay();
+                    if (SlaveAddress == CURRENT_TIME_ADDRESS) {
+                        SlaveAddress = DESTINATION_TIME_ADDRESS;
+
+                    } else {
+                        goto HandleInputEnd;
+                    }
+
+                //
+                // Pound accepts the new input.
+                //
+
+                } else if (Key == KeypadPound) {
+
+                    //
+                    // Check for unfinished input indicated by the presence of
+                    // some remaining dashes.
+                    //
+
+                    if (Index >= 2) {
+                        goto HandleInputEnd;
+                    }
+
+                    Date.Month = (Display[15] * 10) + Display[14];
+                    Date.Day = (Display[13] * 10) + Display[12];
+                    Date.Year = ((uint16_t)Display[11] * 1000) +
+                                ((uint16_t)Display[10] * 100) +
+                                ((uint16_t)Display[9] * 10) +
+                                Display[8];
+
+                    if ((Date.Year < 1000) || (Date.Year > 5000)) {
+                        goto HandleInputEnd;
+                    }
+
+                    Date.Hour = (Display[7] * 10) + Display[6];
+                    Date.Minute = (Display[5] * 10) + Display[4];
+                    Date.Second = (Display[3] * 10) + Display[2];
+
+                    //
+                    // Disable interrupts during the conversion to prevent the
+                    // time advance function from going off half cocked.
+                    //
+
+                    cli();
+                    if (SlaveAddress == CURRENT_TIME_ADDRESS) {
+                        ConvertFromCalendarDate(&Date,
+                                                &CurrentDate,
+                                                &CurrentDaylight);
+
+                    } else {
+                        ConvertFromCalendarDate(&Date,
+                                                &DestinationDate,
+                                                &DestinationDaylight);
+                    }
+
+                    sei();
+                    goto HandleInputEnd;
+
+                //
+                // Zero through nine serve as input.
+                //
+
+                } else {
+                    switch (Key) {
+                    case Keypad1:
+                        Digit = 1;
+                        break;
+
+                    case Keypad2:
+                        Digit = 2;
+                        break;
+
+                    case Keypad3:
+                        Digit = 3;
+                        break;
+
+                    case Keypad4:
+                        Digit = 4;
+                        break;
+
+                    case Keypad5:
+                        Digit = 5;
+                        break;
+
+                    case Keypad6:
+                        Digit = 6;
+                        break;
+
+                    case Keypad7:
+                        Digit = 7;
+                        break;
+
+                    case Keypad8:
+                        Digit = 8;
+                        break;
+
+                    case Keypad9:
+                        Digit = 9;
+                        break;
+
+                    case Keypad0:
+                    default:
+                        Digit = 0;
+                        break;
+                    }
+
+                    if (Index >= 2) {
+                        Display[Index] = Digit;
+                        Index -= 1;
+                    }
+
+                    ConvertToDisplaySegments(Display, Segments, TRUE);
+                    ConvertToDisplaySegments(&(Display[DISPLAY_SIZE]),
+                                             &(Segments[HT16K33_DISPLAY_SIZE]),
+                                             TRUE);
+                }
+
+                //
+                // Redraw the displays assuming something happened.
+                //
+
+                Ht16k33SetDisplay(SlaveAddress, Segments);
+                Ht16k33SetDisplay(SlaveAddress + 2,
+                                  &(Segments[HT16K33_DISPLAY_SIZE]));
+            }
+
+            break;
+
+        //
+        // From the main display, no other buttons do anything.
+        //
+
         default:
             break;
         }
     }
 
+HandleInputEnd:
     RedrawCalendarDisplays(TRUE, DisplayConversionTime);
     return;
 }
@@ -764,7 +964,7 @@ Return Value:
         //
 
         if (RepeatTimer == REPEAT_TIMER_OFF) {
-            RepeatTimer = (CurrentSeconds64 + 32) & 0x3F;
+            RepeatTimer = (CurrentSeconds64 + 16) & 0x3F;
             Ht16k33Read(HT16K33_SLAVE_ADDRESS, Ht16k33KeyData, RawInput, 6);
             State = RawInput[0] | (RawInput[2] << 4) |
                     ((uint16_t)(RawInput[4]) << 8);
