@@ -1,0 +1,6 @@
+Green 19380mcd 3.2v 20ma, 0.24,http://www.digikey.com/product-detail/en/C503B-GCS-CY0C0791/C503B-GCS-CY0C0791-ND/1922941
+Amber 14680mcd 2.1v 20ma, 0.15,http://www.digikey.com/product-detail/en/C503B-AAS-CY0B0251/C503B-AAS-CY0B0251-ND/1922933
+Red 14680 2.1v 20ma,0.15,http://www.digikey.com/product-detail/en/C503B-RAS-CY0B0AA1/C503B-RAS-CY0B0AA1-ND/1922927
+ATMega168 28-DIP,2.54,http://www.digikey.com/product-detail/en/ATMEGA168A-PU/ATMEGA168A-PU-ND/2271215
+68 Ohm Resistor,0.065,http://www.digikey.com/product-detail/en/CF18JT68R0/CF18JT68R0CT-ND/2022714
+120 Ohm Resistor,0.065,http://www.digikey.com/product-detail/en/CF18JT120R/CF18JT120RCT-ND/2022720
