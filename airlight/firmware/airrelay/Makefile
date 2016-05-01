@@ -76,7 +76,7 @@ VPATH = .:..:$(OBJROOT):
 # Compiler and linker flags
 #
 
-CCOPTIONS = -Wall -Werror -Os -gstabs+ -I. -I..
+CCOPTIONS = -Wall -Werror -Os -g -I. -I..
 
 ifeq (avr, $(ARCH))
 CCOPTIONS += -mcall-prologues -funsigned-char -funsigned-bitfields \
@@ -89,10 +89,10 @@ LDOPTIONS = -Wl,-Map=$@.map
 #
 # Assembler flags:
 #
-# --gstabs+                 Build with stabs debugging symbol information.
+# --g                 Build with debugging symbol information.
 #
 
-ASOPTIONS = --gstabs+                                           \
+ASOPTIONS = --g                                           \
 
 #
 # Makefile targets. .PHONY specifies that the following targets don't actually
@@ -191,3 +191,4 @@ endif
 %.rsc:%.rc
 	@echo Compiling Resource - $<
 	@$(RCC) -o $(OBJROOT)/$@ $<
+

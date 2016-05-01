@@ -215,90 +215,192 @@ Return Value:
     HlWriteIo(PORTD, PortD | PORTD_RF_SHUTDOWN);
     HlStall(200);
     HlWriteIo(PORTD, PortD);
-    RfpWriteByte(RfmRegisterInterruptEnable2, 0x00);    // Disable all interrupts
-    RfpWriteByte(RfmRegisterControl1, 0x01);     // Set READY mode
-    RfpWriteByte(RfmRegisterCrystalLoadCapacitance, 0x7F);      // Cap = 12.5pF
-    RfpWriteByte(RfmRegisterMicrocontrollerOutputClock, 0x05);      // Clk output is 2MHz
 
-    RfpWriteByte(RfmRegisterGpio0Config, 0xF4);      // GPIO0 is for RX data output
-    RfpWriteByte(RfmRegisterGpio1Config, 0xEF);      // GPIO1 is TX/RX data CLK output
-    RfpWriteByte(RfmRegisterGpio2Config, 0x00);      // GPIO2 for MCLK output
-    RfpWriteByte(RfmRegisterIoPortConfig, 0x00);      // GPIO port use default value
+    //
+    // Disable all interrupts.
+    //
 
-    RfpWriteByte(RfmRegisterAdcConfig, 0x70);      // NO ADC used
-    RfpWriteByte(RfmRegisterAdcSensorAmplifierOffset, 0x00);      // no ADC used
-    RfpWriteByte(RfmRegisterTemperatureSensorControl, 0x00);      // No temp sensor used
-    RfpWriteByte(RfmRegisterTemperatureValueOffset, 0x00);      // no temp sensor used
+    RfpWriteByte(RfmRegisterInterruptEnable2, 0x00);
 
-    RfpWriteByte(RfmRegisterModulationModeControl1, 0x20);      // No manchester code, no data whiting, data rate < 30Kbps
+    //
+    // Set READY mode.
+    //
 
-    RfpWriteByte(RfmRegisterIfFilterBandwidth, 0x1D);      // IF filter bandwidth
-    RfpWriteByte(RfmRegisterAfcLoopGearshiftOverride, 0x40);      // AFC Loop
-    //RfpWriteByte(RfmRegisterAfcTimingControl, 0x0A);    // AFC timing
+    RfpWriteByte(RfmRegisterControl1, 0x01);
 
-    RfpWriteByte(RfmRegisterClockRecoveryOversamplingRatio, 0xA1);      // clock recovery
-    RfpWriteByte(RfmRegisterClockRecoveryOffset2, 0x20);      // clock recovery
-    RfpWriteByte(RfmRegisterClockRecoveryOffset1, 0x4E);      // clock recovery
-    RfpWriteByte(RfmRegisterClockRecoveryOffset0, 0xA5);      // clock recovery
-    RfpWriteByte(RfmRegisterClockRecoveryTimingLoopGain1, 0x00);      // clock recovery timing
-    RfpWriteByte(RfmRegisterClockRecoveryTimingLoopGain0, 0x0A);      // clock recovery timing
+    //
+    // Set the capacitance to 12.5pF.
+    //
 
+    RfpWriteByte(RfmRegisterCrystalLoadCapacitance, 0x7F);
+
+    //
+    // Set the clock output to 2MHz.
+    //
+
+    RfpWriteByte(RfmRegisterMicrocontrollerOutputClock, 0x05);
+
+    //
+    // GPIO0 is for RX data output.
+    //
+
+    RfpWriteByte(RfmRegisterGpio0Config, 0xF4);
+
+    //
+    // GPIO1 is TX/RX data CLK output.
+    //
+
+    RfpWriteByte(RfmRegisterGpio1Config, 0xEF);
+
+    //
+    // GPIO2 is for MCLK output.
+    //
+
+    RfpWriteByte(RfmRegisterGpio2Config, 0x00);
+
+    //
+    // Set GPIO for the IO ports.
+    //
+
+    RfpWriteByte(RfmRegisterIoPortConfig, 0x00);
+
+    //
+    // Disable ADC.
+    //
+
+    RfpWriteByte(RfmRegisterAdcConfig, 0x70);
+    RfpWriteByte(RfmRegisterAdcSensorAmplifierOffset, 0x00);
+
+    //
+    // Disable temperature sensor.
+    RfpWriteByte(RfmRegisterTemperatureSensorControl, 0x00);
+    RfpWriteByte(RfmRegisterTemperatureValueOffset, 0x00);
+
+    //
+    // Disable manchester code, data whiting. The data rate is < 30Kbps.
+    //
+
+    RfpWriteByte(RfmRegisterModulationModeControl1, 0x20);
+    RfpWriteByte(RfmRegisterIfFilterBandwidth, 0x1D);
+
+    //
+    // Set the AFC loop and timing.
+    //
+
+    RfpWriteByte(RfmRegisterAfcLoopGearshiftOverride, 0x40);
+
+    //
+    // Setup clock recovery.
+    //
+
+    RfpWriteByte(RfmRegisterClockRecoveryOversamplingRatio, 0xA1);
+    RfpWriteByte(RfmRegisterClockRecoveryOffset2, 0x20);
+    RfpWriteByte(RfmRegisterClockRecoveryOffset1, 0x4E);
+    RfpWriteByte(RfmRegisterClockRecoveryOffset0, 0xA5);
+    RfpWriteByte(RfmRegisterClockRecoveryTimingLoopGain1, 0x00);
+    RfpWriteByte(RfmRegisterClockRecoveryTimingLoopGain0, 0x0A);
     RfpWriteByte(RfmRegisterOokCounterValue1, 0x00);
     RfpWriteByte(RfmRegisterOokCounterValue2, 0x00);
     RfpWriteByte(RfmRegisterSlicerPeakHold, 0x00);
 
-    RfpWriteByte(RfmRegisterTxDataRate1, 0x27);      // TX data rate 1
-    RfpWriteByte(RfmRegisterTxDataRate0, 0x52);      // TX data rate 0
+    //
+    // Set TX data rates.
+    //
 
-    RfpWriteByte(RfmRegisterDataAccessControl, 0x8C);      // Data access control
+    RfpWriteByte(RfmRegisterTxDataRate1, 0x27);
+    RfpWriteByte(RfmRegisterTxDataRate0, 0x52);
+    RfpWriteByte(RfmRegisterDataAccessControl, 0x8C);
+    RfpWriteByte(RfmRegisterHeaderControl1, 0xFF);
 
-    RfpWriteByte(RfmRegisterHeaderControl1, 0xFF);      // Header control
+    //
+    // Header 3, 2, 1, 0 are used for head length. Fixed packet length,
+    // synchronize word length 3, 2.
+    //
 
-    RfpWriteByte(RfmRegisterHeaderControl2, 0x42);      // Header 3, 2, 1, 0 used for head length, fixed packet length, synchronize word length 3, 2,
+    RfpWriteByte(RfmRegisterHeaderControl2, 0x42);
 
-    RfpWriteByte(RfmRegisterPreambleLength, 64);        // 64 nibble = 32 byte preamble
-    RfpWriteByte(RfmRegisterPreambleDetectionControl, 0x20);      // 0x35 need to detect 20bit preamble
-    RfpWriteByte(RfmRegisterSyncWord3, 0x2D);      // synchronize word
+    //
+    // Set a 32 byte (64 nybble) preamble.
+    //
+
+    RfpWriteByte(RfmRegisterPreambleLength, 64);
+
+    //
+    // Detect 20 bit preambles.
+    //
+
+    RfpWriteByte(RfmRegisterPreambleDetectionControl, 0x20);
+    RfpWriteByte(RfmRegisterSyncWord3, 0x2D);
     RfpWriteByte(RfmRegisterSyncWord2, 0xD4);
     RfpWriteByte(RfmRegisterSyncWord1, 0x00);
     RfpWriteByte(RfmRegisterSyncWord0, 0x00);
-    RfpWriteByte(RfmRegisterTransmitHeader3, 's');       // set tx header 3
-    RfpWriteByte(RfmRegisterTransmitHeader2, 'o');       // set tx header 2
-    RfpWriteByte(RfmRegisterTransmitHeader1, 'n');       // set tx header 1
-    RfpWriteByte(RfmRegisterTransmitHeader0, 'g');       // set tx header 0
-    RfpWriteByte(RfmRegisterTransmitPacketLength, 17);        // set packet length to 17 bytes
 
-    RfpWriteByte(RfmRegisterCheckHeader3, 's');       // set rx header
+    //
+    // Set the TX header.
+    //
+
+    RfpWriteByte(RfmRegisterTransmitHeader3, 's');
+    RfpWriteByte(RfmRegisterTransmitHeader2, 'o');
+    RfpWriteByte(RfmRegisterTransmitHeader1, 'n');
+    RfpWriteByte(RfmRegisterTransmitHeader0, 'g');
+    RfpWriteByte(RfmRegisterTransmitPacketLength, 17);
+
+    //
+    // Set the RX header to match.
+    //
+
+    RfpWriteByte(RfmRegisterCheckHeader3, 's');
     RfpWriteByte(RfmRegisterCheckHeader2, 'o');
     RfpWriteByte(RfmRegisterCheckHeader1, 'n');
     RfpWriteByte(RfmRegisterCheckHeader0, 'g');
-    RfpWriteByte(RfmRegisterHeaderEnable3, 0xFF);      // check all bits
-    RfpWriteByte(RfmRegisterHeaderEnable2, 0xFF);      // Check all bits
-    RfpWriteByte(RfmRegisterHeaderEnable1, 0xFF);      // check all bits
-    RfpWriteByte(RfmRegisterHeaderEnable0, 0xFF);      // Check all bits
 
+    //
+    // Check all bits of the header.
+    //
+
+    RfpWriteByte(RfmRegisterHeaderEnable3, 0xFF);
+    RfpWriteByte(RfmRegisterHeaderEnable2, 0xFF);
+    RfpWriteByte(RfmRegisterHeaderEnable1, 0xFF);
+    RfpWriteByte(RfmRegisterHeaderEnable0, 0xFF);
     RfpWriteByte(0x56, 0x01);
 
-    RfpWriteByte(RfmRegisterTxPower, 0x07);      // Tx power to max
+    //
+    // Set the TX power to max.
+    //
 
-    RfpWriteByte(RfmRegisterFrequencyHoppingChannelSelect, 0x00);      // no frequency hopping
-    RfpWriteByte(RfmRegisterFrequencyHoppingStepSize, 0x00);      // no frequency hopping
+    RfpWriteByte(RfmRegisterTxPower, 0x07);
 
-    RfpWriteByte(RfmRegisterModulationModeControl2, 0x22);      // GFSK, fd[8]=0, no invert for TX/RX data, FIFO mode, txclk-->gpio
+    //
+    // Disable frequency hopping.
+    //
 
-    RfpWriteByte(RfmRegisterFrequencyDeviation, 0x48);      // Frequency deviation setting to 45K=72*625
+    RfpWriteByte(RfmRegisterFrequencyHoppingChannelSelect, 0x00);
+    RfpWriteByte(RfmRegisterFrequencyHoppingStepSize, 0x00);
 
-    RfpWriteByte(RfmRegisterFrequencyOffset1, 0x00);      // No frequency offset
-    RfpWriteByte(RfmRegisterFrequencyOffset2, 0x00);      // No frequency offset
+    //
+    // Set GFSK, fd[8] = 0, no invert for TX/RX, FIFO mode, txclk to GPIO.
+    //
 
-    RfpWriteByte(RfmRegisterFrequencyBandSelect, 0x53);      // frequency set to 434MHz
-    RfpWriteByte(RfmRegisterNominalCarrierFrequency1, 0x64);      // frequency set to 434MHz
-    RfpWriteByte(RfmRegisterNominalCarrierFrequency0, 0x00);      // frequency set to 434Mhz
+    RfpWriteByte(RfmRegisterModulationModeControl2, 0x22);
 
+    //
+    // Set a frequency deviation of 45K = 72 * 625, with no frequency offset.
+    //
+
+    RfpWriteByte(RfmRegisterFrequencyDeviation, 0x48);
+    RfpWriteByte(RfmRegisterFrequencyOffset1, 0x00);
+    RfpWriteByte(RfmRegisterFrequencyOffset2, 0x00);
+
+    //
+    // Set the frequency to 434MHz.
+    //
+
+    RfpWriteByte(RfmRegisterFrequencyBandSelect, 0x53);
+    RfpWriteByte(RfmRegisterNominalCarrierFrequency1, 0x64);
+    RfpWriteByte(RfmRegisterNominalCarrierFrequency0, 0x00);
     RfpWriteByte(0x5A, 0x7F);
     RfpWriteByte(0x59, 0x40);
     RfpWriteByte(0x58, 0x80);
-
     RfpWriteByte(0x6A, 0x0B);
     RfpWriteByte(0x68, 0x04);
     RfpWriteByte(RfmRegisterClockRecoveryGearshiftOverride, 0x03);
@@ -347,22 +449,50 @@ Return Value:
 
 {
 
-    RfpWriteByte(RfmRegisterControl1, 0x01);  // To ready mode
-    //cbi(PORTD, RXANT);
-    //sbi(PORTD, TXANT);
-    //HlStall(50);
+    //
+    // Set TX ready mode.
+    //
 
-    RfpWriteByte(RfmRegisterControl2, 0x03);  // FIFO reset
-    RfpWriteByte(RfmRegisterControl2, 0x00);  // Clear FIFO
+    RfpWriteByte(RfmRegisterControl1, 0x01);
 
-    RfpWriteByte(RfmRegisterPreambleLength, 64);    // preamble = 64nibble
-    RfpWriteByte(RfmRegisterTransmitPacketLength, BufferSize);    // packet length = 17bytes
+    //
+    // Reset and clear the FIFO.
+    //
+
+    RfpWriteByte(RfmRegisterControl2, 0x03);
+    RfpWriteByte(RfmRegisterControl2, 0x00);
+
+    //
+    // Set the preamble to 64 nybbles, 32 bytes.
+    //
+
+    RfpWriteByte(RfmRegisterPreambleLength, 64);
+
+    //
+    // Set the packet length.
+    //
+
+    RfpWriteByte(RfmRegisterTransmitPacketLength, BufferSize);
     RfpWriteFifo(Buffer, BufferSize);
-    RfpWriteByte(RfmRegisterInterruptEnable1, 0x04);  // enable packet sent interrupt
-    RfpReadByte(RfmRegisterInterruptStatus1);     // Read Interrupt status1 register
+
+    //
+    // Enable the packet sent interrupt.
+    //
+
+    RfpWriteByte(RfmRegisterInterruptEnable1, 0x04);
+
+    //
+    // Read interrupt status 1.
+    //
+
+    RfpReadByte(RfmRegisterInterruptStatus1);
     RfpReadByte(RfmRegisterInterruptStatus2);
 
-    RfpWriteByte(RfmRegisterControl1, 9); // Start TX
+    //
+    // Begin the transmission.
+    //
+
+    RfpWriteByte(RfmRegisterControl1, 9);
 
     //
     // Wait for an interrupt to come in.
@@ -372,10 +502,11 @@ Return Value:
         HlUpdateIo();
     }
 
-    RfpWriteByte(RfmRegisterControl1, 0x01);  // to ready mode
+    //
+    // Set back to ready mode.
+    //
 
-    //cbi(PORTD, RXANT);  // disable all interrupts
-    //cbi(PORTD, TXANT);
+    RfpWriteByte(RfmRegisterControl1, 0x01);
     return;
 }
 
@@ -407,9 +538,6 @@ Return Value:
     //
 
     RfpWriteByte(RfmRegisterControl1, 0x01);
-    //sbi(PORTD, RXANT);
-    //cbi(PORTD, TXANT);
-    //HlStall(50);
     RfResetReceive();
     return;
 }
@@ -443,17 +571,12 @@ Return Value:
     //
 
     RfpWriteByte(RfmRegisterControl1, 0x01);
-
     RfpReadByte(RfmRegisterInterruptStatus1);
     RfpReadByte(RfmRegisterInterruptStatus2);
-
     RfpWriteByte(RfmRegisterRxFifoControl, 17);
-
     RfpWriteByte(RfmRegisterControl2, 0x03);
     RfpWriteByte(RfmRegisterControl2, 0x00);
-
     RfpWriteByte(RfmRegisterControl1, 5);
-
     RfpWriteByte(RfmRegisterInterruptEnable1, 2);
     return;
 }
@@ -538,9 +661,6 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
-char RegString[] PROGMEM = "Reg";
-char RegDoneString[] PROGMEM = "RegDone\r\n";
-
 UCHAR
 RfpReadByte (
     UCHAR Address
@@ -571,10 +691,8 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    //HlStall(2);
     HlSpiReadWriteByte(Address);
     Value = HlSpiReadWriteByte(RFM_DUMMY_VALUE);
-    //HlStall(2);
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
 
@@ -591,10 +709,6 @@ Return Value:
 
 #endif
 
-    //HlPrintString(RegString);
-    //HlPrintHexInteger(Address);
-    //HlPrintHexInteger(Value);
-    //HlPrintString(RegDoneString);
     return Value;
 }
 
@@ -634,7 +748,6 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    //HlStall(2);
     HlSpiReadWriteByte(RfmRegisterFifoAccess);
     HlStall(2);
 
@@ -649,14 +762,12 @@ Return Value:
     if (Size == 1) {
         PortB |= PORTB_RF_SELECT;
         HlWriteIo(PORTB, PortB);
-        //HlStall(2);
     }
 
     HlSpiReadWriteByte(RFM_DUMMY_VALUE);
     if (Size == 2) {
         PortB |= PORTB_RF_SELECT;
         HlWriteIo(PORTB, PortB);
-        //HlStall(2);
     }
 
 #endif
@@ -678,7 +789,6 @@ Return Value:
         if (ByteIndex + 2 == Size - 1) {
             PortB |= PORTB_RF_SELECT;
             HlWriteIo(PORTB, PortB);
-            //HlStall(2);
         }
 
 #endif
@@ -690,7 +800,6 @@ Return Value:
 
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    //HlStall(2);
 
 #endif
 
@@ -729,11 +838,9 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    //HlStall(2);
     HlSpiReadWriteByte(Address);
     HlStall(2);
     HlSpiReadWriteByte(Value);
-    //HlStall(2);
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
     return;
@@ -775,7 +882,6 @@ Return Value:
     PortB = HlReadIo(PORTB);
     PortB &= ~PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
-    //HlStall(2);
     HlSpiReadWriteByte(RfmRegisterFifoAccess | RFM_ADDRESS_WRITE);
 
     //
@@ -786,7 +892,6 @@ Return Value:
         HlSpiReadWriteByte(Buffer[ByteIndex]);
     }
 
-    //HlStall(2);
     PortB |= PORTB_RF_SELECT;
     HlWriteIo(PORTB, PortB);
     return;
