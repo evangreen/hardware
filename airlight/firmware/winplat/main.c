@@ -195,6 +195,36 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
+UINT
+HlRandom (
+    UINT Max
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a random integer between 0 and the given maximum.
+
+Arguments:
+
+    Max - Supplies the modulus.
+
+Return Value:
+
+    Returns a random integer betwee 0 and the max, exclusive.
+
+--*/
+
+{
+
+    if (Max == 0) {
+        return Max;
+    }
+
+    return rand() % Max;
+}
+
 VOID
 KepDisplayOutputs (
     VOID
@@ -639,6 +669,11 @@ Return Value:
         Length += sizeof("Stopped, ");
     }
 
+    if ((Inputs & CONTROLLER_INPUT_RANDOMIZE_TIMING) != 0) {
+        printf("Randomized, ");
+        Length += sizeof("Randomized, ");
+    }
+
     while (Length < 80) {
         putchar(' ');
         Length += 1;
@@ -1007,9 +1042,13 @@ Return Value:
                 break;
 
             case 'J':
+                KeController.Inputs ^= CONTROLLER_INPUT_STOP_TIMING;
+                KeController.InputsChange |= CONTROLLER_INPUT_STOP_TIMING;
                 break;
 
             case 'K':
+                KeController.Inputs ^= CONTROLLER_INPUT_RANDOMIZE_TIMING;
+                KeController.InputsChange |= CONTROLLER_INPUT_RANDOMIZE_TIMING;
                 break;
 
             //

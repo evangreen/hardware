@@ -122,6 +122,12 @@ KepUpdateOverlaps (
     VOID
     );
 
+USHORT
+KepReadTiming (
+    INT Phase,
+    SIGNAL_TIMING Timing
+    );
+
 VOID
 KepZeroMemory (
     PVOID Buffer,
@@ -468,7 +474,7 @@ Return Value:
              (Ring->Interval == IntervalPreMaxRest))) {
 
             Ring->PedInterval = IntervalWalk;
-            Ring->PedTimer = KeTimingData[Phase][TimingWalk];
+            Ring->PedTimer = KepReadTiming(Phase, TimingWalk);
             KeController.Output.PedCall &= ~(1 << Phase);
             KeController.Flags |= CONTROLLER_UPDATE_TIMERS;
         }
@@ -487,10 +493,10 @@ Return Value:
                 (KepGetCallOnSide(RingIndex, TRUE) != 0)) {
 
                 if ((KeController.MaxII & (1 << RingIndex)) != 0) {
-                    Ring->MaxTimer = KeTimingData[Phase][TimingMaxII];
+                    Ring->MaxTimer = KepReadTiming(Phase, TimingMaxII);
 
                 } else {
-                    Ring->MaxTimer = KeTimingData[Phase][TimingMaxI];
+                    Ring->MaxTimer = KepReadTiming(Phase, TimingMaxI);
                 }
 
                 //
@@ -563,9 +569,9 @@ Return Value:
         //
 
         if (Ring->Phase != 0) {
-            TimeToReduce = KeTimingData[Phase][TimingTimeToReduce];
-            MinGap = KeTimingData[Phase][TimingMinGap];
-            OriginalPassage = KeTimingData[Phase][TimingPassage];
+            TimeToReduce = KepReadTiming(Phase, TimingTimeToReduce);
+            MinGap = KepReadTiming(Phase, TimingMinGap);
+            OriginalPassage = KepReadTiming(Phase, TimingPassage);
             if ((TimeToReduce != 0) &&
                 ((KeController.StopTiming & (1 << RingIndex)) == 0)) {
 
@@ -639,7 +645,7 @@ Return Value:
                  VARIABLE_INITIAL_IN_PROGRESS)) {
 
                 KeController.VariableInitial[Phase] +=
-                                KeTimingData[Phase][TimingSecondsPerActuation];
+                                KepReadTiming(Phase, TimingSecondsPerActuation);
 
                 if (KeController.VariableInitial[Phase] >
                     MAX_VARIABLE_INITIAL) {
@@ -739,7 +745,7 @@ Return Value:
             }
 
             Ring->PedInterval = IntervalPedClear;
-            Ring->PedTimer = KeTimingData[Phase][TimingPedClear];
+            Ring->PedTimer = KepReadTiming(Phase, TimingPedClear);
             KeController.Flags |= CONTROLLER_UPDATE_TIMERS;
             break;
 
@@ -814,11 +820,11 @@ Return Value:
                 } else {
                     if ((KeController.MaxII & (1 << RingIndex)) != 0) {
                         Ring->Interval = IntervalMaxII;
-                        Ring->MaxTimer = KeTimingData[Phase][TimingMaxII];
+                        Ring->MaxTimer = KepReadTiming(Phase, TimingMaxII);
 
                     } else {
                         Ring->Interval = IntervalMaxI;
-                        Ring->MaxTimer = KeTimingData[Phase][TimingMaxI];
+                        Ring->MaxTimer = KepReadTiming(Phase, TimingMaxI);
                     }
 
                     KeController.Flags |= CONTROLLER_UPDATE_TIMERS;
@@ -855,7 +861,7 @@ Return Value:
 
         case IntervalYellow:
             Ring->Interval = IntervalRedClear;
-            Ring->IntervalTimer = KeTimingData[Phase][TimingRedClear];
+            Ring->IntervalTimer = KepReadTiming(Phase, TimingRedClear);
             KeController.Flags |= CONTROLLER_UPDATE_TIMERS;
 
             //
@@ -1266,7 +1272,7 @@ Return Value:
     }
 
     Ring->Interval = IntervalYellow;
-    Ring->IntervalTimer = KeTimingData[Phase][TimingYellow];
+    Ring->IntervalTimer = KepReadTiming(Phase, TimingYellow);
     Ring->ReducedPassage = 0;
     Ring->PassageTimer = 0;
     Ring->TimeToReduceTimer = 0;
@@ -1476,29 +1482,28 @@ Return Value:
 
 {
 
+    UCHAR Phase;
     PSIGNAL_RING Ring;
 
     Ring = &(KeController.Ring[RingIndex]);
-    if (Ring->Phase == 0) {
+    Phase = Ring->Phase;
+    if (Phase == 0) {
         return FALSE;
     }
 
     //
+    // Move the phase into the 0 to "phases per ring" range.
+    //
+
+    Phase -= RingIndex * PHASES_PER_RING;
+
+    //
     // If it's halfway through the number of phases in the ring, then it is a
-    // barrier phase.
+    // barrier phase. If it's the last phase in the ring, it's also a barrier
+    // phase.
     //
 
-    if (Ring->Phase - 1 ==
-        (RingIndex * PHASES_PER_RING) + (PHASES_PER_RING / 2)) {
-
-        return TRUE;
-    }
-
-    //
-    // If it's the last phase in the ring, it is a barrier phase.
-    //
-
-    if (Ring->Phase - 1 == ((RingIndex + 1) * PHASES_PER_RING) - 1) {
+    if ((Phase == (PHASES_PER_RING / 2)) || (Phase == PHASES_PER_RING)) {
         return TRUE;
     }
 
@@ -1549,12 +1554,11 @@ Return Value:
     // service the pedestrian.
     //
 
-
     if ((KeController.Output.PedCall & (~KeController.PedOmit) &
          (1 << Phase)) != 0) {
 
         Ring->PedInterval = IntervalWalk;
-        Ring->PedTimer = KeTimingData[Phase][TimingWalk];
+        Ring->PedTimer = KepReadTiming(Phase, TimingWalk);
 
     } else {
         Ring->PedInterval = IntervalInvalid;
@@ -1568,7 +1572,7 @@ Return Value:
     //
 
     Ring->Interval = IntervalMinGreen;
-    MinGreen = KeTimingData[Phase][TimingMinGreen];
+    MinGreen = KepReadTiming(Phase, TimingMinGreen);
     VariableInitial = KeController.VariableInitial[Phase];
     if (VariableInitial > MinGreen) {
         Ring->IntervalTimer = VariableInitial;
@@ -1580,10 +1584,10 @@ Return Value:
     }
 
     if ((KeController.MaxII & (1 << RingIndex)) != 0) {
-        MaxTime = KeTimingData[Phase][TimingMaxII];
+        MaxTime = KepReadTiming(Phase, TimingMaxII);
 
     } else {
-        MaxTime = KeTimingData[Phase][TimingMaxI];
+        MaxTime = KepReadTiming(Phase, TimingMaxI);
     }
 
     //
@@ -1598,10 +1602,10 @@ Return Value:
     // Set up passage and gap reduction timers.
     //
 
-    Ring->ReducedPassage = KeTimingData[Phase][TimingPassage];
+    Ring->ReducedPassage = KepReadTiming(Phase, TimingPassage);
     Ring->PassageTimer = Ring->ReducedPassage;
-    Ring->BeforeReductionTimer = KeTimingData[Phase][TimingBeforeReduction];
-    Ring->TimeToReduceTimer = KeTimingData[Phase][TimingTimeToReduce];
+    Ring->BeforeReductionTimer = KepReadTiming(Phase, TimingBeforeReduction);
+    Ring->TimeToReduceTimer = KepReadTiming(Phase, TimingTimeToReduce);
 
     //
     // Reset the barrier status and clear calls on this phase, since it is now
@@ -2126,6 +2130,51 @@ Return Value:
 
     KeController.Output.OverlapState = Mask;
     return;
+}
+
+USHORT
+KepReadTiming (
+    INT Phase,
+    SIGNAL_TIMING Timing
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads a timing value from memory for the given.
+
+Arguments:
+
+    Phase - Supplies the phase to read from.
+
+    Timing - Supplies the parameter to read.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINT Extra;
+    USHORT Value;
+
+    Value = KeTimingData[Phase][Timing];
+    if (((KeController.Inputs & CONTROLLER_INPUT_RANDOMIZE_TIMING) != 0) &&
+        (Value != 0)) {
+
+        Extra = HlRandom(Value);
+        if (Extra >= (Value / 2)) {
+            Value += Extra - (Value / 2);
+
+        } else {
+            Value -= Extra;
+        }
+    }
+
+    return Value;
 }
 
 VOID

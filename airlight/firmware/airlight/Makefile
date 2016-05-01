@@ -162,7 +162,7 @@ endif
 $(BINROOT):
 	-@mkdir $(BINROOT) > nul
 
-wipe:
+clean:
 ifeq ($(ARCH),avr)
 	-rm -r -f $(OBJROOT)
 	-rm -r -f $(BINROOT)

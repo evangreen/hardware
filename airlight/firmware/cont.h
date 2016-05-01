@@ -74,9 +74,12 @@ Author:
 #define CONTROLLER_INPUT_WALK_REST_MODIFIER       0x0010
 #define CONTROLLER_INPUT_EXTERNAL_START           0x0020
 #define CONTROLLER_INPUT_STOP_TIMING              0x0040
+#define CONTROLLER_INPUT_RANDOMIZE_TIMING         0x0080
 
 #define CONTROLLER_INPUT_INIT_MASK \
-    (CONTROLLER_INPUT_ALL_MIN_RECALL | CONTROLLER_INPUT_WALK_REST_MODIFIER)
+    (CONTROLLER_INPUT_ALL_MIN_RECALL | \
+     CONTROLLER_INPUT_WALK_REST_MODIFIER | \
+     CONTROLLER_INPUT_RANDOMIZE_TIMING)
 
 //
 // Define controller flags.
@@ -489,6 +492,27 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+UINT
+HlRandom (
+    UINT Max
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a random integer between 0 and the given maximum.
+
+Arguments:
+
+    Max - Supplies the modulus.
+
+Return Value:
+
+    Returns a random integer betwee 0 and the max, exclusive.
 
 --*/
 

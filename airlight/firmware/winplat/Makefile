@@ -41,11 +41,11 @@ endif
 
 SRCROOT := $(subst \,/,$(SRCROOT))
 ifeq (Windows_NT, $(OS))
-BINROOT = $(subst \,/,$(CURDIR))/$(ARCH)bin
-OBJROOT = $(subst \,/,$(CURDIR))/$(ARCH)obj
+BINROOT = $(subst \,/,$(CURDIR))/bin
+OBJROOT = $(subst \,/,$(CURDIR))/obj
 else
-BINROOT = $(CURDIR)/x86bin
-OBJROOT = $(CURDIR)/x86obj
+BINROOT = $(CURDIR)/bin
+OBJROOT = $(CURDIR)/obj
 endif
 
 #
@@ -64,6 +64,8 @@ else
 BINARY := $(BINARY)
 endif
 
+unexport GCC_ROOT
+
 #
 # VPATH specifies which directories make should look in to find all files.
 # Paths are separated by colons.
@@ -75,16 +77,10 @@ VPATH = .:..:$(OBJROOT)
 # Compiler and linker flags
 #
 
-CCOPTIONS = -Wall -Werror -Os -gstabs+ -I. -I..
+CCOPTIONS = -Wall -Werror -Os -g -I. -I..
 LDOPTIONS = -Wl,-Map=$@.map
 
-#
-# Assembler flags:
-#
-# --gstabs+                 Build with stabs debugging symbol information.
-#
-
-ASOPTIONS = --gstabs+
+ASOPTIONS = --g
 
 #
 # Makefile targets. .PHONY specifies that the following targets don't actually

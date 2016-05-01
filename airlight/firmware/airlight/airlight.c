@@ -137,10 +137,11 @@ Environment:
 #define LED_STATUS_RED_CLEAR 0x0100
 
 //
-// Define the magic value programmed to know that the EEPROM is valid.
+// Define constants used in the linear congruential generator.
 //
 
-#define EEPROM_VERIFICATION_VALUE 0xAB
+#define RANDOM_MULTIPLIER 1103515245
+#define RANDOM_INCREMENT 12345
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -251,9 +252,15 @@ KepLoadNonVolatileData (
     VOID
     );
 
-UCHAR
-HlpReverseNybble (
-    UCHAR Value
+VOID
+KepUpdateEepromByte (
+    PVOID Address,
+    UCHAR Byte
+    );
+
+USHORT
+HlpSumEeprom (
+    VOID
     );
 
 //
@@ -266,6 +273,8 @@ INT HlInputs;
 INT HlInputsChange;
 
 INT HlLastIoUpdateMilliseconds;
+
+UINT HlRandomSeed;
 
 char NewlineString[] PROGMEM = "\r\n";
 char SendingString[] PROGMEM = ".";
@@ -291,6 +300,17 @@ char HlLedCharacters[16] PROGMEM = {
     0x5E,
     0x79,
     0x71
+};
+
+USHORT HlDefaultTiming[PHASE_COUNT][TimingCount] PROGMEM = {
+    {60, 35, 120, 170, 40, 120, 25, 11, 0, 0, 0, 0},
+    {120, 50, 350, 250, 75, 120, 45, 19, 0, 0, 0, 0},
+    {40, 35, 140, 170, 60, 150, 20, 11, 0, 0, 0, 0},
+    {100, 30, 250, 150, 60, 120, 40, 20, 0, 0, 0, 0},
+    {60, 35, 120, 170, 40, 120, 25, 11, 0, 0, 0, 0},
+    {120, 50, 350, 250, 75, 120, 45, 19, 0, 0, 0, 0},
+    {40, 35, 140, 170, 60, 150, 20, 11, 0, 0, 0, 0},
+    {100, 30, 250, 150, 60, 120, 40, 20, 0, 0, 0, 0},
 };
 
 //
@@ -335,9 +355,9 @@ PHASE_MASK EEPROM KeCnaDataEeprom[CNA_INPUT_COUNT] = {
 };
 
 PHASE_MASK EEPROM KeVehicleMemoryEeprom = 0xFF;
-UCHAR EEPROM KeUnitControlEeprom = 0x0;
+UCHAR EEPROM KeUnitControlEeprom = CONTROLLER_INPUT_RANDOMIZE_TIMING;
 UCHAR EEPROM KeRingControlEeprom = 0x0;
-UCHAR EEPROM KeEepromVerificationByte = EEPROM_VERIFICATION_VALUE;
+USHORT EEPROM KeEepromChecksum = 0xFFFF;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -540,6 +560,14 @@ Return Value:
     Inputs = ~Inputs;
 
     //
+    // Use user input to keep random random.
+    //
+
+    if (Inputs != 0) {
+        HlRandomSeed ^= HlCurrentMillisecond;
+    }
+
+    //
     // To the "change" global, OR in any bits that just changed.
     //
 
@@ -561,6 +589,37 @@ Return Value:
 
     HlWriteIo(PORTB, PortB);
     return;
+}
+
+UINT
+HlRandom (
+    UINT Max
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a random integer between 0 and the given maximum.
+
+Arguments:
+
+    Max - Supplies the modulus.
+
+Return Value:
+
+    Returns a random integer betwee 0 and the max, exclusive.
+
+--*/
+
+{
+
+    HlRandomSeed = (HlRandomSeed * RANDOM_MULTIPLIER) + RANDOM_INCREMENT;
+    if (Max == 0) {
+        return 0;
+    }
+
+    return HlRandomSeed % Max;
 }
 
 //
@@ -924,6 +983,7 @@ Return Value:
 {
 
     ULONG BlinkStart;
+    USHORT Checksum;
     UCHAR Exit;
     UCHAR Hundreds;
     UINT LedValue;
@@ -1206,12 +1266,8 @@ Return Value:
                       &(KeTimingDataEeprom[PreviousPhase - 1][PreviousTiming]),
                       TimingValue);
 
-                if (HlReadEepromByte(&KeEepromVerificationByte) !=
-                    EEPROM_VERIFICATION_VALUE) {
-
-                    HlWriteEepromByte(&KeEepromVerificationByte,
-                                      EEPROM_VERIFICATION_VALUE);
-                }
+                Checksum = HlpSumEeprom();
+                HlWriteEepromWord(&KeEepromChecksum, Checksum);
             }
 
             PreviousPhase = Phase;
@@ -1562,7 +1618,7 @@ Return Value:
     NewValue = KepSetByte(KeVehicleMemory);
     if (NewValue != KeVehicleMemory) {
         KeVehicleMemory = NewValue;
-        HlWriteEepromByte(&KeVehicleMemoryEeprom, KeVehicleMemory);
+        KepUpdateEepromByte(&KeVehicleMemoryEeprom, KeVehicleMemory);
         KeController.Memory = NewValue;
     }
 
@@ -1597,8 +1653,8 @@ Return Value:
     NewValue = KepSetByte(KeUnitControl);
     if (NewValue != KeUnitControl) {
         if ((NewValue & CONTROLLER_INPUT_INIT_MASK) != KeUnitControl) {
-            HlWriteEepromByte(&KeUnitControlEeprom,
-                              NewValue & CONTROLLER_INPUT_INIT_MASK);
+            KepUpdateEepromByte(&KeUnitControlEeprom,
+                                NewValue & CONTROLLER_INPUT_INIT_MASK);
         }
 
         KeController.Inputs |= (NewValue ^ KeUnitControl) & NewValue;
@@ -1637,7 +1693,7 @@ Return Value:
 
     NewValue = KepSetByte(KeRingControl);
     if (NewValue != KeRingControl) {
-        HlWriteEepromByte(&KeRingControlEeprom, NewValue);
+        KepUpdateEepromByte(&KeRingControlEeprom, NewValue);
         KeApplyRingControl(NewValue);
         KeRingControl = NewValue;
     }
@@ -2199,17 +2255,21 @@ Return Value:
 
 {
 
+    USHORT ComputedSum;
+    UINT LedValue;
     INT Phase;
+    USHORT SavedSum;
     SIGNAL_TIMING Timing;
     USHORT Value;
+
+    ComputedSum = HlpSumEeprom();
+    SavedSum = HlReadEepromWord(&KeEepromChecksum);
 
     //
     // If the EEPROM is valid, load data from it.
     //
 
-    if (HlReadEepromByte(&KeEepromVerificationByte) ==
-        EEPROM_VERIFICATION_VALUE) {
-
+    if (ComputedSum == SavedSum) {
         for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
             for (Timing = 0; Timing < TimingCount; Timing += 1) {
                 Value = HlReadEepromWord(&(KeTimingDataEeprom[Phase][Timing]));
@@ -2223,10 +2283,6 @@ Return Value:
 
         KeVehicleMemory = HlReadEepromByte(&KeVehicleMemoryEeprom);
         KeUnitControl = HlReadEepromByte(&KeUnitControlEeprom);
-        if (KeUnitControl == 0xFF) {
-            KeUnitControl = 0;
-        }
-
         KeRingControl = HlReadEepromByte(&KeRingControlEeprom);
 
     //
@@ -2235,51 +2291,117 @@ Return Value:
     //
 
     } else {
+
+        //
+        // Indicate that the device has been reset.
+        //
+
+        LedValue = LED_DIGIT(8);
+        LedValue |= (LedValue << BITS_PER_BYTE);
+        HlLedOutputs[LedColumnDigit3] = LedValue;
+        HlLedOutputs[LedColumnDigit2] = LedValue;
+        HlLedOutputs[LedColumnDigit1] = LedValue;
+        HlLedOutputs[LedColumnDigit0] = LedValue;
+        HlUpdateIo();
+        HlStall(2000);
+        HlLedOutputs[LedColumnDigit3] = 0;
+        HlLedOutputs[LedColumnDigit2] = 0;
+        HlLedOutputs[LedColumnDigit1] = 0;
+        HlLedOutputs[LedColumnDigit0] = 0;
+        HlUpdateIo();
+
+        //
+        // Load the default timing for all phases.
+        //
+
         for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
             for (Timing = 0; Timing < TimingCount; Timing += 1) {
-                KeTimingData[Phase][Timing] = 50;
+                KeTimingData[Phase][Timing] =
+                       RtlReadProgramSpace16(&(HlDefaultTiming[Phase][Timing]));
             }
         }
 
         KeVehicleMemory = 0xFF;
-        KeUnitControl = 0;
+        KeUnitControl = CONTROLLER_INPUT_RANDOMIZE_TIMING;
         KeRingControl = 0;
     }
 
     return;
 }
 
-UCHAR
-HlpReverseNybble (
-    UCHAR Value
+VOID
+KepUpdateEepromByte (
+    PVOID Address,
+    UCHAR Byte
     )
 
 /*++
 
 Routine Description:
 
-    This routine reverses the order of the lower four bits of the given value.
-    The upper four bits will be cleared.
+    This routine writes a byte into the EEPROM permanent memory, and updates
+    the checksum.
 
 Arguments:
 
-    Value - Supplies the byte whose first nybble should be reversed.
+    Address - Supplies the byte offset from the beginning of the EEPROM of the
+        byte to program.
+
+    Byte - Supplies the value to write.
 
 Return Value:
 
-    Returns the result, reversed.
+    None.
 
 --*/
 
 {
 
-    UCHAR Result;
+    USHORT Checksum;
 
-    Result = ((Value & 0x01) << 3) |
-             ((Value & 0x02) << 1) |
-             ((Value & 0x04) >> 1) |
-             ((Value & 0x08) >> 3);
+    HlWriteEepromByte(Address, Byte);
+    Checksum = HlpSumEeprom();
+    HlWriteEepromWord(&KeEepromChecksum, Checksum);
+    return;
+}
 
-    return Result;
+USHORT
+HlpSumEeprom (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sums the EEPROM data and returns the checksum.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the checksum of the EEPROM data, not including the checksum itself.
+
+--*/
+
+{
+
+    INT Phase;
+    USHORT Sum;
+    SIGNAL_TIMING Timing;
+
+    Sum = 0;
+    for (Phase = 0; Phase < PHASE_COUNT; Phase += 1) {
+        for (Timing = 0; Timing < TimingCount; Timing += 1) {
+            Sum += HlReadEepromWord(&(KeTimingDataEeprom[Phase][Timing]));
+        }
+    }
+
+    Sum += HlReadEepromByte(&KeVehicleMemoryEeprom);
+    Sum += HlReadEepromByte(&KeUnitControlEeprom);
+    Sum += HlReadEepromByte(&KeRingControlEeprom);
+    return Sum;
 }
 
