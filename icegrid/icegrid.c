@@ -1,0 +1,188 @@
+/*++
+
+Copyright (c) 2016 Evan Green. All Rights Reserved.
+
+Module Name:
+
+    icegrid.c
+
+Abstract:
+
+    This module implements the firmware for the Ice cube LED grid project.
+
+Author:
+
+    Evan Green 12-Nov-2016
+
+Environment:
+
+    STM32F103C8T6 firmware
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include "icegrid.h"
+#include "stm32f1xx_hal.h"
+
+//
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+//
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+volatile long MyGlobal = 0x12348888;
+volatile long MyVar = 0;
+
+const GPIO_InitTypeDef Pc13Gpio = {
+    GPIO_PIN_13, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_LOW
+};
+
+//
+// Configure the main oscillator to run off of HSE (high speed external).
+// It's an 8MHz crystal, so 8 / PreDiv1 * Mul = 8 / 1 * 9 = 72MHz.
+//
+
+const RCC_OscInitTypeDef OscParameters = {
+    RCC_OSCILLATORTYPE_HSE,
+    RCC_HSE_ON,
+    RCC_HSE_PREDIV_DIV1,
+    RCC_LSE_OFF,
+    RCC_HSI_OFF,
+    RCC_HSICALIBRATION_DEFAULT,
+    RCC_LSI_OFF,
+    {
+        RCC_PLL_ON,
+        RCC_PLLSOURCE_HSE,
+        RCC_PLL_MUL9
+    }
+};
+
+const RCC_ClkInitTypeDef ClkParameters = {
+    RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK |
+        RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2,
+
+    RCC_SYSCLKSOURCE_PLLCLK,
+    RCC_SYSCLK_DIV1,
+    RCC_HCLK_DIV2,
+    RCC_HCLK_DIV1
+};
+
+//
+// ------------------------------------------------------------------ Functions
+//
+
+__NORETURN
+int
+main (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the main function for the firmware. It should not
+    return.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Does not return.
+
+--*/
+
+{
+
+    HAL_Init();
+    HAL_RCC_OscConfig((RCC_OscInitTypeDef *)&OscParameters);
+    HAL_RCC_ClockConfig((RCC_ClkInitTypeDef *)&ClkParameters, FLASH_LATENCY_2);
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    HAL_GPIO_Init(GPIOC, (GPIO_InitTypeDef *)&Pc13Gpio);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+    while (MyGlobal == 0x12348888) {
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        HAL_Delay(250);
+        MyVar += 1;
+    }
+
+    while (1) ;
+}
+
+void
+SysTick_Handler (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when the system tick timer interrupt fires.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    HAL_IncTick();
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+void
+__libc_init_array (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called by the startup assembly to call all the static
+    constructors.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+
