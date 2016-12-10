@@ -41,3 +41,25 @@ Author:
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+void
+Ws2812Initialize (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes hardware support for controlling a WS2812 strip.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+

@@ -23,12 +23,15 @@
 BINARY := icegrid
 
 OBJS := icegrid.o                     \
+        ws2812.o                      \
         CMSIS/STM32F1xx/gcc/startup_stm32f103xb.o \
         CMSIS/STM32F1xx/system_stm32f1xx.o \
         HAL/Src/stm32f1xx_hal.o \
         HAL/Src/stm32f1xx_hal_cortex.o \
         HAL/Src/stm32f1xx_hal_rcc.o \
-        HAL/Src/stm32f1xx_hal_gpio.o
+        HAL/Src/stm32f1xx_hal_gpio.o \
+        HAL/Src/stm32f1xx_hal_tim.o  \
+        HAL/Src/stm32f1xx_hal_dma.o \
 
 MCU=STM32F103xB
 

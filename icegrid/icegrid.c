@@ -51,7 +51,10 @@ volatile long MyGlobal = 0x12348888;
 volatile long MyVar = 0;
 
 const GPIO_InitTypeDef Pc13Gpio = {
-    GPIO_PIN_13, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_LOW
+    .Pin = GPIO_PIN_13,
+    .Mode = GPIO_MODE_OUTPUT_PP,
+    .Pull = GPIO_NOPULL,
+    .Speed = GPIO_SPEED_FREQ_LOW
 };
 
 //
@@ -60,28 +63,28 @@ const GPIO_InitTypeDef Pc13Gpio = {
 //
 
 const RCC_OscInitTypeDef OscParameters = {
-    RCC_OSCILLATORTYPE_HSE,
-    RCC_HSE_ON,
-    RCC_HSE_PREDIV_DIV1,
-    RCC_LSE_OFF,
-    RCC_HSI_OFF,
-    RCC_HSICALIBRATION_DEFAULT,
-    RCC_LSI_OFF,
-    {
-        RCC_PLL_ON,
-        RCC_PLLSOURCE_HSE,
-        RCC_PLL_MUL9
+    .OscillatorType = RCC_OSCILLATORTYPE_HSE,
+    .HSEState = RCC_HSE_ON,
+    .HSEPredivValue = RCC_HSE_PREDIV_DIV1,
+    .LSEState = RCC_LSE_OFF,
+    .HSIState = RCC_HSI_OFF,
+    .HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT,
+    .LSIState = RCC_LSI_OFF,
+    .PLL = {
+        .PLLState = RCC_PLL_ON,
+        .PLLSource = RCC_PLLSOURCE_HSE,
+        .PLLMUL = RCC_PLL_MUL9
     }
 };
 
 const RCC_ClkInitTypeDef ClkParameters = {
-    RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK |
-        RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2,
+    .ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK |
+                 RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2,
 
-    RCC_SYSCLKSOURCE_PLLCLK,
-    RCC_SYSCLK_DIV1,
-    RCC_HCLK_DIV2,
-    RCC_HCLK_DIV1
+    .SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK,
+    .AHBCLKDivider = RCC_SYSCLK_DIV1,
+    .APB1CLKDivider = RCC_HCLK_DIV2,
+    .APB2CLKDivider = RCC_HCLK_DIV1
 };
 
 //
@@ -119,6 +122,7 @@ Return Value:
     __HAL_RCC_GPIOC_CLK_ENABLE();
     HAL_GPIO_Init(GPIOC, (GPIO_InitTypeDef *)&Pc13Gpio);
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+    Ws2812Initialize();
     while (MyGlobal == 0x12348888) {
         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
         HAL_Delay(250);
