@@ -35,6 +35,12 @@ Author:
 //
 
 //
+// Define the number of LEDs to control.
+//
+
+#define LED_COUNT 16
+
+//
 // -------------------------------------------------------------------- Globals
 //
 
