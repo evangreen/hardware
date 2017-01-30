@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "icegrid.h"
 #include "stm32f1xx_hal.h"
+#include "icegrid.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -116,6 +116,10 @@ Return Value:
 
 {
 
+    uint32_t Error;
+    uint32_t Index;
+
+    DbgInititialize();
     HAL_Init();
     HAL_RCC_OscConfig((RCC_OscInitTypeDef *)&OscParameters);
     HAL_RCC_ClockConfig((RCC_ClkInitTypeDef *)&ClkParameters, FLASH_LATENCY_2);
@@ -123,13 +127,19 @@ Return Value:
     HAL_GPIO_Init(GPIOC, (GPIO_InitTypeDef *)&Pc13Gpio);
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
     Ws2812Initialize();
-    while (MyGlobal == 0x12348888) {
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-        HAL_Delay(250);
-        MyVar += 1;
+    Esp8622Initialize();
+    Error = Esp8266Configure();
+    if (Error != 0) {
+        Ws2812ClearDisplay();
+        Ws2812OutputBinary(0, 5, Error, LED_COLOR_RED);
     }
 
-    while (1) ;
+    Index = 0;
+    while (1) {
+        HAL_Delay(200);
+        //Ws2812OutputBinary(0, 16, Index, Index);
+        Index += 1;
+    }
 }
 
 void

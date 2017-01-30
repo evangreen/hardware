@@ -20,13 +20,34 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+#include "lib.h"
+
 //
 // --------------------------------------------------------------------- Macros
 //
 
 //
+// This macro clears the entire LED display.
+//
+
+#define Ws2812ClearDisplay() Ws2812ClearLeds(0, LED_COUNT)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the Wifi Station name.
+//
+
+#define WIFI_BSSID "IceGrid"
+
+//
+// Define the amount of time the system stays in AP mode for configuration
+// after powerup before trying to connect to its configured network.
+//
+
+#define WIFI_CONNECT_TIMEOUT 60
 
 #define __NORETURN __attribute__((noreturn))
 
@@ -39,6 +60,26 @@ Author:
 //
 
 #define LED_COUNT 16
+
+//
+// Define the number of rows and columns.
+//
+
+#define LED_COLUMNS 5
+#define LED_ROWS 3
+
+//
+// Define some sweet colors.
+//
+
+#define LED_COLOR_BLACK 0x00000000
+#define LED_COLOR_RED 0x00FF0000
+#define LED_COLOR_GREEN 0x0000FF00
+#define LED_COLOR_BLUE 0x000000FF
+#define LED_COLOR_YELLOW 0x00FFFF00
+#define LED_COLOR_MAGENTA 0x00FF00FF
+#define LED_COLOR_CYAN 0x0000FFFF
+#define LED_COLOR_WHITE 0x00FFFFFF
 
 //
 // -------------------------------------------------------------------- Globals
@@ -66,6 +107,188 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+void
+Ws2812ClearLeds (
+    uint16_t Led,
+    uint16_t Count
+    );
+
+/*++
+
+Routine Description:
+
+    This routine clears the given LEDs to unilluminated.
+
+Arguments:
+
+    Led - Supplies the LED index to clear.
+
+    Count - Supplies the number of LEDs to clear.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
+Ws2812DisplayIp (
+    uint32_t IpAddress,
+    uint32_t Color
+    );
+
+/*++
+
+Routine Description:
+
+    This routine displays an IP address on the ice grid.
+
+Arguments:
+
+    IpAddress - Supplies the IP address to display.
+
+    Color - Supplies the color to display it in.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
+Ws2812OutputBinary (
+    uint16_t Led,
+    uint16_t BitCount,
+    uint16_t Value,
+    uint32_t RgbColor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine encodes a value in binary on the LED display.
+
+Arguments:
+
+    Led - Supplies the LED index to start from (highest bit).
+
+    BitCount - Supplies the number of bits to display.
+
+    Value - Supplies the hex value to display.
+
+    RgbColor - Supplies the color to display the value in.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
+Ws2812SetLeds (
+    uint16_t Led,
+    uint32_t RgbColor,
+    uint16_t Count
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets multiple LEDs to the given color.
+
+Arguments:
+
+    Led - Supplies the LED index to set.
+
+    RgbColor - Supplies the color in ARGB format (where blue is in the 8 LSB).
+
+    Count - Supplies the number of LEDs to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
+Ws2812SetLed (
+    uint16_t Led,
+    uint32_t RgbColor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets an LED to the given color.
+
+Arguments:
+
+    Led - Supplies the LED index to set.
+
+    RgbColor - Supplies the color in ARGB format (where blue is in the 8 LSB).
+
+Return Value:
+
+    None.
+
+--*/
+
+//
+// ESP8266 functions
+//
+
+void
+Esp8622Initialize (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the ESP8266.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+uint32_t
+Esp8266Configure (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs wireless network configuration. It starts by acting
+    as an AP for 60 seconds, allowing someone to connect to it and configure
+    wifi credentials. If credentials have been configured or there are
+    previously saved credentials, it connects as a wifi client with those.
+    Otherwise it stays in AP mode and waits to be configured.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    0 on success.
+
+    Returns the step number on which an error occurred if a failure
+    occurred.
 
 --*/
 

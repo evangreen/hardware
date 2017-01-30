@@ -25,8 +25,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "icegrid.h"
 #include "stm32f1xx_hal.h"
+#include "icegrid.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -157,7 +157,6 @@ Return Value:
 {
 
     int Index;
-    int Led;
 
     for (Index = 0; Index < LED_BITS_PER_FRAME; Index += 1) {
         if (Index & 1) {
@@ -196,8 +195,6 @@ Return Value:
     HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
     HAL_NVIC_SetPriority(TIM4_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-    Index = 1;
-    Led = 0;
 
     //
     // Start DMA. With each compare match of the timer, a DMA request will fire.
@@ -211,28 +208,252 @@ Return Value:
                           Ws2812PixelIo,
                           LED_BITS_PER_FRAME);
 
-    while (1) {
-        HAL_Delay(200);
-        if (Led == 16) {
-            for (Index = 0; Index < LED_BITS_PER_FRAME; Index += 1) {
-                Ws2812PixelIo[Index] = LED_BIT_HIGH;
-            }
+    return;
+}
 
-            Led = 0;
+void
+Ws2812ClearLeds (
+    uint16_t Led,
+    uint16_t Count
+    )
+
+/*++
+
+Routine Description:
+
+    This routine clears the given LEDs to unilluminated.
+
+Arguments:
+
+    Led - Supplies the LED index to clear.
+
+    Count - Supplies the number of LEDs to clear.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    uint16_t EndIndex;
+    uint16_t Index;
+
+    EndIndex = (Led + Count) * BITS_PER_LED;
+    for (Index = Led * BITS_PER_LED; Index < EndIndex; Index += 1) {
+        Ws2812PixelIo[Index] = LED_BIT_LOW;
+    }
+
+    return;
+}
+
+void
+Ws2812DisplayIp (
+    uint32_t IpAddress,
+    uint32_t Color
+    )
+
+/*++
+
+Routine Description:
+
+    This routine displays an IP address on the ice grid.
+
+Arguments:
+
+    IpAddress - Supplies the IP address to display.
+
+    Color - Supplies the color to display it in.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    int Digit;
+    int DigitIndex;
+    int Index;
+    int Integer;
+
+    //
+    // Display the IP address as a series of binary coded decimals.
+    //
+
+    for (Index = 0; Index < 4; Index += 1) {
+        Ws2812ClearDisplay();
+        HAL_Delay(500);
+        Integer = IpAddress >> 24;
+        IpAddress <<= 8;
+        for (DigitIndex = 0; DigitIndex < 3; DigitIndex += 1) {
+            Digit = Integer / 100;
+            Integer = (Integer - (Digit * 100)) * 10;
+            Ws2812OutputBinary(LED_COLUMNS * DigitIndex, 4, Digit, Color);
+            HAL_Delay(500);
+        }
+    }
+
+    Ws2812ClearDisplay();
+    return;
+}
+
+void
+Ws2812OutputBinary (
+    uint16_t Led,
+    uint16_t BitCount,
+    uint16_t Value,
+    uint32_t RgbColor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine encodes a value in binary on the LED display.
+
+Arguments:
+
+    Led - Supplies the LED index to start from (highest bit).
+
+    BitCount - Supplies the number of bits to display.
+
+    Value - Supplies the hex value to display.
+
+    RgbColor - Supplies the color to display the value in.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    uint16_t Bit;
+    uint16_t LedIndex;
+
+    for (Bit = 0; Bit < BitCount; Bit += 1) {
+        LedIndex = Led + BitCount - 1 - Bit;
+        if ((Value & (1 << Bit)) != 0) {
+            Ws2812SetLed(LedIndex, RgbColor);
 
         } else {
-            for (Index = 0; Index < LED_BITS_PER_FRAME; Index += 1) {
-                Ws2812PixelIo[Index] = LED_BIT_LOW;
-            }
+            Ws2812SetLed(LedIndex, 0);
+        }
+    }
 
-            for (Index = (Led * BITS_PER_LED) + 16;
-                 Index < (Led * BITS_PER_LED) + 24;
-                 Index += 1) {
+    return;
+}
 
-                Ws2812PixelIo[Index] = LED_BIT_HIGH;
-            }
+void
+Ws2812SetLeds (
+    uint16_t Led,
+    uint32_t RgbColor,
+    uint16_t Count
+    )
 
-            Led += 1;
+/*++
+
+Routine Description:
+
+    This routine sets multiple LEDs to the given color.
+
+Arguments:
+
+    Led - Supplies the LED index to set.
+
+    RgbColor - Supplies the color in ARGB format (where blue is in the 8 LSB).
+
+    Count - Supplies the number of LEDs to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    uint16_t Index;
+
+    for (Index = 0; Index < Count; Index += 1) {
+        Ws2812SetLed(Led + Index, RgbColor);
+    }
+
+    return;
+}
+
+void
+Ws2812SetLed (
+    uint16_t Led,
+    uint32_t RgbColor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets an LED to the given color.
+
+Arguments:
+
+    Led - Supplies the LED index to set.
+
+    RgbColor - Supplies the color in ARGB format (where blue is in the 8 LSB).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    uint16_t DataIndex;
+    uint16_t Index;
+
+    //
+    // Set the green.
+    //
+
+    DataIndex = (Led * BITS_PER_LED) + 7;
+    for (Index = 0; Index < 8; Index += 1) {
+        if ((RgbColor & (1 << (8 + Index))) != 0) {
+            Ws2812PixelIo[DataIndex - Index] = LED_BIT_HIGH;
+
+        } else {
+            Ws2812PixelIo[DataIndex - Index] = LED_BIT_LOW;
+        }
+    }
+
+    //
+    // Set the red.
+    //
+
+    DataIndex = (Led * BITS_PER_LED) + 15;
+    for (Index = 0; Index < 8; Index += 1) {
+        if ((RgbColor & (1 << (16 + Index))) != 0) {
+            Ws2812PixelIo[DataIndex - Index] = LED_BIT_HIGH;
+
+        } else {
+            Ws2812PixelIo[DataIndex - Index] = LED_BIT_LOW;
+        }
+    }
+
+    //
+    // Set the blue.
+    //
+
+    DataIndex = (Led * BITS_PER_LED) + 23;
+    for (Index = 0; Index < 8; Index += 1) {
+        if ((RgbColor & (1 << (0 + Index))) != 0) {
+            Ws2812PixelIo[DataIndex - Index] = LED_BIT_HIGH;
+
+        } else {
+            Ws2812PixelIo[DataIndex - Index] = LED_BIT_LOW;
         }
     }
 
