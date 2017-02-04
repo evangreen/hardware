@@ -117,7 +117,6 @@ Return Value:
 {
 
     uint32_t Error;
-    uint32_t Index;
 
     DbgInititialize();
     HAL_Init();
@@ -134,12 +133,59 @@ Return Value:
         Ws2812OutputBinary(0, 5, Error, LED_COLOR_RED);
     }
 
-    Index = 0;
+    Esp8266ServeUdpForever();
     while (1) {
-        HAL_Delay(200);
-        //Ws2812OutputBinary(0, 16, Index, Index);
-        Index += 1;
+        ;
     }
+}
+
+void
+IceGridProcessData (
+    char *Data
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles incoming requests to change the LEDs. Data takes the
+    form of a comma separated list of hex values in text.
+    Example: FF23AC,FF00FF,...,0\r\n. The list can end early, and the remaining
+    values will be set to black.
+
+Arguments:
+
+    Data - Supplies a pointer to the null-terminated request text.
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    int Led;
+    char *Previous;
+    uint32_t Value;
+
+    Previous = Data;
+    for (Led = 0; Led < LED_COUNT; Led += 1) {
+        Value = LibScanHexInt(&Data);
+        if (Data == Previous) {
+            break;
+        }
+
+        Ws2812SetLed(Led, Value);
+        if (*Data == ',') {
+            Data += 1;
+        }
+    }
+
+    if (Led != LED_COUNT) {
+        Ws2812SetLeds(Led, LED_COLOR_BLACK, LED_COUNT - Led);
+    }
+
+    return;
 }
 
 void

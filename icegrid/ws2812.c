@@ -413,13 +413,29 @@ Return Value:
 {
 
     uint16_t DataIndex;
+    uint16_t LedStart;
     uint16_t Index;
+
+    //
+    // Watch out. The LED strips are wired together in a backwards "S" shape.
+    // But they're logically arranged in a grid. Reverse the order of the
+    // second strip to keep things appearing normal.
+    //
+
+    if ((Led >= LED_COLUMNS) &&
+        (Led < (2 * LED_COLUMNS))) {
+
+        LedStart = ((2 * LED_COLUMNS) - 1 - (Led - LED_COLUMNS)) * BITS_PER_LED;
+
+    } else {
+        LedStart = Led * BITS_PER_LED;
+    }
 
     //
     // Set the green.
     //
 
-    DataIndex = (Led * BITS_PER_LED) + 7;
+    DataIndex = LedStart + 7;
     for (Index = 0; Index < 8; Index += 1) {
         if ((RgbColor & (1 << (8 + Index))) != 0) {
             Ws2812PixelIo[DataIndex - Index] = LED_BIT_HIGH;
@@ -433,7 +449,7 @@ Return Value:
     // Set the red.
     //
 
-    DataIndex = (Led * BITS_PER_LED) + 15;
+    DataIndex = LedStart + 15;
     for (Index = 0; Index < 8; Index += 1) {
         if ((RgbColor & (1 << (16 + Index))) != 0) {
             Ws2812PixelIo[DataIndex - Index] = LED_BIT_HIGH;
@@ -447,7 +463,7 @@ Return Value:
     // Set the blue.
     //
 
-    DataIndex = (Led * BITS_PER_LED) + 23;
+    DataIndex = LedStart + 23;
     for (Index = 0; Index < 8; Index += 1) {
         if ((RgbColor & (1 << (0 + Index))) != 0) {
             Ws2812PixelIo[DataIndex - Index] = LED_BIT_HIGH;

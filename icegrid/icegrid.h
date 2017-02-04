@@ -47,7 +47,13 @@ Author:
 // after powerup before trying to connect to its configured network.
 //
 
-#define WIFI_CONNECT_TIMEOUT 60
+#define WIFI_RECONFIGURE_TIMEOUT 60
+
+//
+// Define the amount of time the system waits for the client to connect.
+//
+
+#define WIFI_CONNECT_TIMEOUT 15
 
 #define __NORETURN __attribute__((noreturn))
 
@@ -88,6 +94,29 @@ Author:
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+void
+IceGridProcessData (
+    char *Data
+    );
+
+/*++
+
+Routine Description:
+
+    This routine handles incoming requests to change the LEDs. Data takes the
+    form of a comma separated list of hex values in text.
+    Example: FF23AC,FF00FF,...,0\r\n. The list can end early, and the remaining
+    values will be set to black.
+
+Arguments:
+
+    Data - Supplies a pointer to the null-terminated request text.
+Return Value:
+
+    None.
+
+--*/
 
 void
 Ws2812Initialize (
@@ -289,6 +318,27 @@ Return Value:
 
     Returns the step number on which an error occurred if a failure
     occurred.
+
+--*/
+
+void
+Esp8266ServeUdpForever (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine receives UDP requests forever.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

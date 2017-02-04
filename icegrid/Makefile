@@ -27,9 +27,12 @@ OBJS := esp8266.o                     \
         lib.o                         \
         ws2812.o                      \
         CMSIS/STM32F1xx/gcc/startup_stm32f103xb.o \
+        libaeabi-cortexm0/llsr.o \
         CMSIS/STM32F1xx/system_stm32f1xx.o \
         HAL/Src/stm32f1xx_hal.o \
         HAL/Src/stm32f1xx_hal_cortex.o \
+        HAL/Src/stm32f1xx_hal_flash.o \
+        HAL/Src/stm32f1xx_hal_flash_ex.o \
         HAL/Src/stm32f1xx_hal_rcc.o \
         HAL/Src/stm32f1xx_hal_gpio.o \
         HAL/Src/stm32f1xx_hal_tim.o  \
@@ -105,3 +108,6 @@ clean:
 	@echo Assembling - $<
 	@$(CC) $(CCOPTIONS) -c -o $@ $<
 
+%.o:%.S
+	@echo Assembling - $<
+	@$(CC) $(CCOPTIONS) -c -o $@ $<

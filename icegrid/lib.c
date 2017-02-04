@@ -515,6 +515,58 @@ Return Value:
     return Value;
 }
 
+uint32_t
+LibScanHexInt (
+    char **String
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads an hexadecimal integer from a string.
+
+Arguments:
+
+    String - Supplies a pointer that on input points to the string to read.
+        On output, this will be advanced beyond the end of the string.
+
+Return Value:
+
+    Returns the integer value.
+
+--*/
+
+{
+
+    char *Current;
+    uint32_t Digit;
+    uint32_t Value;
+
+    Current = *String;
+    Value = 0;
+    while (1) {
+        if ((*Current >= 'a') && (*Current <= 'f')) {
+            Digit = *Current - 'a' + 0xA;
+
+        } else if ((*Current >= 'A') && (*Current <= 'F')) {
+            Digit = *Current - 'A' + 0xA;
+
+        } else if ((*Current >= '0') && (*Current <= '9')) {
+            Digit = *Current - '0';
+
+        } else {
+            break;
+        }
+
+        Value = (Value << 4) | Digit;
+        Current += 1;
+    }
+
+    *String = Current;
+    return Value;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

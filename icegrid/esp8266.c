@@ -31,6 +31,14 @@ Environment:
 // --------------------------------------------------------------------- Macros
 //
 
+//
+// Define the base in flash (non-volatile) where the credentials are stored.
+// Pick something up near the end of the device to minimize the chance that
+// code will conflict with it.
+//
+
+#define FLASH_CREDENTIALS_ADDRESS 0x0800F800
+
 #define ESP8266_HTTP_OK "HTTP/1.1 200 OK\r\n\r\n"
 #define ESP8266_HTTP_OK_SIZE 19
 #define ESP8266_HTTP_404 "HTTP/1.1 404 Not Found\r\n\r\n"
@@ -55,6 +63,14 @@ Environment:
     "<head></head>" \
     "<body>" \
     "<h3>Ok!</h3>" \
+    "</body>" \
+    "</html>" \
+
+#define ESP8266_CONNECTION_REJECT_PAGE \
+    "<html>" \
+    "<head></head>" \
+    "<body>" \
+    "<h3>Something went wrong! Problem %d.</h3>" \
     "</body>" \
     "</html>" \
 
@@ -86,6 +102,20 @@ Environment:
 #define UART_RX_MASK 0x1FF
 
 //
+// Define the UART TX buffer size. Used only for debugging. This must be a
+// power of two.
+//
+
+#define UART_TX_SIZE 512
+#define UART_TX_MASK 0x1FF
+
+//
+// Define the size of the SSID and password fields for the client connection.
+//
+
+#define ESP8266_CREDENTIAL_SIZE 64
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -105,7 +135,8 @@ Esp8266Reset (
     );
 
 int
-Esp8266GetApIp (
+Esp8266GetIp (
+    char *Command,
     uint32_t *IpAddress
     );
 
@@ -132,6 +163,23 @@ Esp8266HandleHttpRequest (
     HTTP_REQUEST_TYPE RequestType,
     const char *Uri,
     int32_t DataLength
+    );
+
+int
+Esp8266GetPostParameter (
+    char *PostData,
+    char *PostEnd,
+    char *Field,
+    char *Data,
+    uint32_t DataSize
+    );
+
+int
+Esp8266UrlDecode (
+    char *PostData,
+    char *PostEnd,
+    char *Data,
+    uint32_t DataSize
     );
 
 void
@@ -192,6 +240,13 @@ UartClearRxBuffer (
     void
     );
 
+int
+FlashProgram (
+    void *FlashAddress,
+    void *Data,
+    uint32_t Size
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -234,9 +289,12 @@ const GPIO_InitTypeDef Esp8266RxPin = {
     .Speed = GPIO_SPEED_FREQ_HIGH
 };
 
-const char Esp8266Ssid[64];
-const char Esp8266Password[64];
-const uint16_t Esp8266CredentialsSum;
+char *Esp8266Ssid = (char *)FLASH_CREDENTIALS_ADDRESS;
+char *Esp8266Password = \
+    (char *)FLASH_CREDENTIALS_ADDRESS + ESP8266_CREDENTIAL_SIZE;
+
+uint16_t *Esp8266CredentialsSum =
+    (void *)FLASH_CREDENTIALS_ADDRESS + (ESP8266_CREDENTIAL_SIZE * 2);
 
 //
 // Store the AP or client IP, for debugging.
@@ -254,11 +312,19 @@ volatile uint16_t UartRxConsumer;
 volatile uint16_t UartErrors;
 
 //
-// TODO: Remove this.
+// Save the transmit history for debugging purposes. If things are getting
+// tight this (and its associated code) can be removed without consequence.
 //
 
-uint8_t EvanSend[512];
-uint16_t EvanSendIndex;
+uint8_t UartTxBuffer[UART_TX_SIZE];
+uint16_t UartTxIndex;
+
+const FLASH_EraseInitTypeDef FlashEraseCommand = {
+    .TypeErase = FLASH_TYPEERASE_PAGES,
+    .Banks = FLASH_BANK_1,
+    .PageAddress = FLASH_CREDENTIALS_ADDRESS,
+    .NbPages = 1
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -342,8 +408,14 @@ Return Value:
     int CredentialsOk;
     uint32_t ErrorStep;
     uint32_t IpAddress;
+    uint16_t NewSum;
     uint16_t OldSum;
+    char *Password;
+    char *Ssid;
     uint32_t Timeout;
+
+    Password = Esp8266Password;
+    Ssid = Esp8266Ssid;
 
     //
     // Loop until valid wireless credentials are given.
@@ -372,7 +444,7 @@ Return Value:
         }
 
         ErrorStep += 1;
-        if (Esp8266GetApIp(&IpAddress) != 0) {
+        if (Esp8266GetIp("CIPAP?", &IpAddress) != 0) {
             goto ConfigureEnd;
         }
 
@@ -398,17 +470,16 @@ Return Value:
         ErrorStep += 1;
         Color = LED_COLOR_RED;
         CredentialsOk = 0;
-        OldSum = (volatile uint16_t)Esp8266CredentialsSum;
-        if ((Esp8266ChecksumCredentials(Esp8266Ssid, Esp8266Password) ==
-             Esp8266CredentialsSum) &&
-            (Esp8266Ssid[0] != '\0')) {
+        OldSum = *Esp8266CredentialsSum;
+        if ((Esp8266ChecksumCredentials(Ssid, Password) == OldSum) &&
+            (Ssid[0] != '\0')) {
 
             CredentialsOk = 1;
-            Color = LED_COLOR_GREEN;
+            Color = LED_COLOR_YELLOW;
         }
 
         Esp8266IpAddress = IpAddress;
-        Timeout = HAL_GetTick() + (WIFI_CONNECT_TIMEOUT * 1000);
+        Timeout = HAL_GetTick() + (WIFI_RECONFIGURE_TIMEOUT * 1000);
         while ((HAL_GetTick() <= Timeout) || (CredentialsOk == 0)) {
             Ws2812DisplayIp(IpAddress, Color);
             Esp8266GatherNewCredentials();
@@ -417,26 +488,153 @@ Return Value:
             // If the credentials checksum changed, break out and go try it.
             //
 
-            if ((volatile uint16_t)Esp8266CredentialsSum != OldSum) {
-                if ((Esp8266ChecksumCredentials(Esp8266Ssid, Esp8266Password) ==
-                     Esp8266CredentialsSum) &&
-                    (Esp8266Ssid[0] != '\0')) {
+            NewSum = *Esp8266CredentialsSum;
+            if (NewSum != OldSum) {
+                if ((Esp8266ChecksumCredentials(Ssid, Password) == NewSum) &&
+                    (Ssid[0] != '\0')) {
 
                     break;
                 }
             }
         }
 
+        Ws2812OutputBinary(0, 1, 1, LED_COLOR_YELLOW);
+
         //
-        // Attempt to connect using the credentials provided.
+        // Attempt to connect using the credentials provided. Stop the server
+        // first.
         //
 
+        ErrorStep += 1;
+        Esp8266SendCommand("CIPSERVER=0");
+        if (Esp8266ReceiveOk() != 0) {
+            goto ConfigureEnd;
+        }
+
+        //
+        // Act as a client.
+        //
+
+        ErrorStep += 1;
+        Esp8266SendCommand("CWMODE=1");
+        if (Esp8266ReceiveOk() != 0) {
+            goto ConfigureEnd;
+        }
+
+        //
+        // Send the command to connect. Send it out piecemeal to avoid having
+        // to allocate a line buffer.
+        //
+
+        ErrorStep += 1;
+        UartTransmit("AT+CWJAP=\"", 10);
+        UartTransmit(Ssid, LibStringLength(Ssid));
+        UartTransmit("\",\"", 3);
+        UartTransmit(Password, LibStringLength(Password));
+        UartTransmit("\"\r\n", 3);
+
+        //
+        // The result looks something like:
+        // busy p...
+        // WIFI CONNECTED
+        // WIFI GOT IP
+        //
+        // OK
+        //
+        // Wait a while for all those things to come in, hoping for an OK.
+        //
+
+        Timeout = HAL_GetTick() + (WIFI_CONNECT_TIMEOUT * 1000);
+        CredentialsOk = 0;
+        while (HAL_GetTick() <= Timeout) {
+            if (Esp8266ReceiveOk() == 0) {
+                CredentialsOk = 1;
+                break;
+            }
+        }
+
+        if (CredentialsOk == 0) {
+            continue;
+        }
+
+        ErrorStep += 1;
+        if (Esp8266GetIp("CIPSTA?", &IpAddress) != 0) {
+            goto ConfigureEnd;
+        }
+
+        Ws2812DisplayIp(IpAddress, LED_COLOR_GREEN);
+        break;
     }
 
     ErrorStep = 0;
 
 ConfigureEnd:
     return ErrorStep;
+}
+
+void
+Esp8266ServeUdpForever (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine receives UDP requests forever.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    char *Current;
+    int32_t DataSize;
+    char Line[160];
+    int LineSize;
+
+    //
+    // Fire up a UDP connection. CIPSTART takes the form:
+    // "TCP|UDP",<id>,<addr>,<remote port>,<local port>,<mode>
+    // Mode 2 indicates that a response will be sent to whichever port was
+    // received from last.
+    //
+
+    Esp8266SendCommand("CIPSTART=0,\"UDP\",\"0.0.0.0\",8080,8080,2");
+    Esp8266ReceiveOk();
+    while (1) {
+        LineSize = Esp8266ReceiveLine(Line, sizeof(Line) - 1);
+        if (LineSize < 8) {
+            continue;
+        }
+
+        if ((LibStringCompare(Line, "+IPD,", 5) == 0) &&
+            ((Line[5] >= '0') && (Line[5] <= '9')) &&
+            (Line[6] == ',')) {
+
+            Current = Line + 7;
+            DataSize = LibScanInt(&Current);
+            if (*Current == ':') {
+                Current += 1;
+            }
+
+            if (Current + DataSize > &(Line[LineSize])) {
+                DataSize = &(Line[LineSize]) - Current;
+            }
+
+            Current[DataSize] = '\0';
+            IceGridProcessData(Current);
+        }
+    }
+
+    return;
 }
 
 void
@@ -570,7 +768,8 @@ Return Value:
 }
 
 int
-Esp8266GetApIp (
+Esp8266GetIp (
+    char *Command,
     uint32_t *IpAddress
     )
 
@@ -578,9 +777,12 @@ Esp8266GetApIp (
 
 Routine Description:
 
-    This routine reads the AP station IP address.
+    This routine reads the AP station or client IP address.
 
 Arguments:
+
+    Command - Supplies the command to send, including the question mark. Valid
+        values are CIPAP? and CIPSTA?
 
     IpAddress - Supplies a pointer where the IP address will be returned.
 
@@ -594,11 +796,13 @@ Return Value:
 
 {
 
+    uint32_t Length;
     char Line[80];
 
     *IpAddress = 0;
 
-    Esp8266SendCommand("CIPAP?");
+    Length = LibStringLength(Command);
+    Esp8266SendCommand(Command);
 
     //
     // The response looks like this:
@@ -611,11 +815,11 @@ Return Value:
     // Start by receiving the IP address.
     //
 
-    if (Esp8266ReceiveLine(Line, sizeof(Line)) <= 11) {
+    if (Esp8266ReceiveLine(Line, sizeof(Line)) <= Length + 5) {
         return -1;
     }
 
-    if (Esp8266ReadIpAddress(Line + 11, IpAddress) != 0) {
+    if (Esp8266ReadIpAddress(Line + Length + 5, IpAddress) != 0) {
         return -1;
     }
 
@@ -716,15 +920,19 @@ Return Value:
 
 {
 
+    const char *PasswordEnd;
+    const char *SsidEnd;
     uint16_t Sum;
 
+    SsidEnd = Ssid + ESP8266_CREDENTIAL_SIZE;
+    PasswordEnd = Password + ESP8266_CREDENTIAL_SIZE;
     Sum = 0;
-    while (*Ssid != '\0') {
+    while ((*Ssid != '\0') && (Ssid < SsidEnd)) {
         Sum += *Ssid;
         Ssid += 1;
     }
 
-    while (*Password != '\0') {
+    while ((*Password != '\0') && (Password < PasswordEnd)) {
         Sum += *Password;
         Password += 1;
     }
@@ -761,6 +969,7 @@ Return Value:
     int32_t DataLength;
     char *End;
     char Line[120];
+    int OpenConnections;
     HTTP_REQUEST_TYPE RequestType;
 
     //
@@ -780,11 +989,19 @@ Return Value:
     Connection = Line[0];
 
     //
-    // Service requests from the connection.
+    // Service requests.
     //
 
+    OpenConnections = 1;
     while (1) {
         if (Esp8266ReceiveLine(Line, sizeof(Line)) <= 0) {
+            continue;
+        }
+
+        if (((Line[0] >= '0') && (Line[0] <= '9')) &&
+            (LibStringCompare(Line + 1, ",CONNECT", 8) == 0)) {
+
+            OpenConnections += 1;
             continue;
         }
 
@@ -792,10 +1009,13 @@ Return Value:
         // Break out if the connection was closed.
         //
 
-        if ((Line[0] == Connection) &&
+        if (((Line[0] >= '0') && (Line[0] <= '9')) &&
             (LibStringCompare(Line + 1, ",CLOSED", 7) == 0)) {
 
-            break;
+            OpenConnections -= 1;
+            if (OpenConnections == 0) {
+                break;
+            }
         }
 
         //
@@ -803,9 +1023,10 @@ Return Value:
         //
 
         if ((LibStringCompare(Line, "+IPD,", 5) == 0) &&
-            (Line[5] == Connection) &&
+            ((Line[5] >= '0') && (Line[5] <= '9')) &&
             (Line[6] == ',')) {
 
+            Connection = Line[5];
             Current = Line + 7;
             DataLength = LibScanInt(&Current);
             if (*Current == ':') {
@@ -885,7 +1106,16 @@ Return Value:
 
 {
 
+    char *Current;
     char Character;
+    uint16_t Checksum;
+    char *End;
+    uint32_t PageError;
+    char Password[ESP8266_CREDENTIAL_SIZE];
+    char Post[256];
+    int Problem;
+    char Ssid[ESP8266_CREDENTIAL_SIZE];
+    int Status;
 
     if ((RequestType == HttpRequestGet) &&
         (LibStringCompare(Uri, "/", 2) == 0)) {
@@ -915,10 +1145,100 @@ Return Value:
             DataLength -= 1;
         }
 
-        Esp8266SendHttpResponse(Connection, ESP8266_CONNECTION_ACCEPT_PAGE);
+        //
+        // Gather the post parameters. There's an extra blank line queued up
+        // from the previous receive. And actually the post parameters don't
+        // end in a CRLF so the receive line call will technically fail.
+        //
+
+        Problem = 1;
+        Esp8266ReceiveLine(Post, sizeof(Post));
+        Status = 1;
+        Esp8266ReceiveLine(Post, sizeof(Post));
+        if ((LibStringCompare(Post, "+IPD,", 5) == 0) &&
+            (Post[5] == Connection) &&
+            (Post[6] == ',')) {
+
+            Current = Post + 7;
+            DataLength = LibScanInt(&Current);
+            if (*Current == ':') {
+                Current += 1;
+            }
+
+            End = Current + DataLength;
+            if (End > &(Post[sizeof(Post)])) {
+                End = &(Post[sizeof(Post)]);
+            }
+
+            Status = Esp8266GetPostParameter(Current,
+                                             End,
+                                             "network",
+                                             Ssid,
+                                             ESP8266_CREDENTIAL_SIZE);
+
+            Status |= Esp8266GetPostParameter(Current,
+                                              End,
+                                              "pw",
+                                              Password,
+                                              ESP8266_CREDENTIAL_SIZE);
+
+            if (Status != 0) {
+                Problem = 2;
+            }
+
+        } else {
+            Problem = 3;
+        }
+
+        //
+        // If it worked, save the credentials in flash.
+        //
+
+        if (Status == 0) {
+            HAL_FLASH_Unlock();
+            Status = HAL_FLASHEx_Erase(
+                                  (FLASH_EraseInitTypeDef *)&FlashEraseCommand,
+                                  &PageError);
+
+            Status |= FlashProgram(Esp8266Ssid,
+                                   Ssid,
+                                   LibStringLength(Ssid) + 1);
+
+            Status |= FlashProgram(Esp8266Password,
+                                   Password,
+                                   LibStringLength(Password) + 1);
+
+            if (Status != 0) {
+                Ws2812OutputBinary(0, 5, 1, LED_COLOR_CYAN);
+                Problem = 4;
+            }
+
+            Checksum = Esp8266ChecksumCredentials(Esp8266Ssid, Esp8266Password);
+            Status |= FlashProgram(Esp8266CredentialsSum,
+                                   &Checksum,
+                                   sizeof(uint16_t));
+
+            if (Status != 0) {
+                Ws2812OutputBinary(0, 5, 1, LED_COLOR_CYAN);
+                Problem = 5;
+            }
+
+            HAL_FLASH_Lock();
+        }
+
+        if (Status == 0) {
+            Esp8266SendHttpResponse(Connection, ESP8266_CONNECTION_ACCEPT_PAGE);
+
+        } else {
+            LibStringPrint(Post,
+                           sizeof(Post),
+                           ESP8266_CONNECTION_REJECT_PAGE,
+                           Problem);
+
+            Esp8266SendHttpResponse(Connection, Post);
+        }
 
     } else {
-
         while (DataLength != 0) {
             UartReceive(&Character, 1);
             DataLength -= 1;
@@ -928,6 +1248,165 @@ Return Value:
     }
 
     return;
+}
+
+int
+Esp8266GetPostParameter (
+    char *PostData,
+    char *PostEnd,
+    char *Field,
+    char *Data,
+    uint32_t DataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine searches for a particular POST data element.
+
+Arguments:
+
+    PostData - Supplies a pointer to the POST data.
+
+    PostEnd - Supplies the end of the POST data.
+
+    Field - Supplies the member to search for.
+
+    Data - Supplies a pointer where the decoded data will be returned on
+        success.
+
+    DataSize - Supplies the size of the data buffer.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    uint32_t FieldLength;
+
+    FieldLength = LibStringLength(Field);
+    while (PostData + FieldLength + 1 < PostEnd) {
+        if (LibStringCompare(PostData, Field, FieldLength) != 0) {
+            PostData += 1;
+            continue;
+        }
+
+        PostData += FieldLength;
+        if (*PostData != '=') {
+            continue;
+        }
+
+        PostData += 1;
+        return Esp8266UrlDecode(PostData, PostEnd, Data, DataSize);
+    }
+
+    return -1;
+}
+
+int
+Esp8266UrlDecode (
+    char *PostData,
+    char *PostEnd,
+    char *Data,
+    uint32_t DataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine URL decodes the given string.
+
+Arguments:
+
+    PostData - Supplies a pointer to the POST data.
+
+    PostEnd - Supplies the end of the POST data.
+
+    Data - Supplies a pointer where the decoded data will be returned on
+        success.
+
+    DataSize - Supplies the size of the data buffer.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    char *DataEnd;
+    int Index;
+
+    DataEnd = Data + DataSize - 1;
+    while ((PostData < PostEnd) && (Data < DataEnd)) {
+
+        //
+        // Alphanumeric characters pass unmolested.
+        //
+
+        if (((*PostData >= 'A') && (*PostData <= 'Z')) ||
+            ((*PostData >= 'a') && (*PostData <= 'z')) ||
+            ((*PostData >= '0') && (*PostData <= '9'))) {
+
+            *Data = *PostData;
+            PostData += 1;
+
+        //
+        // Plus gets converted to space.
+        //
+
+        } else if (*PostData == '+') {
+            *Data = ' ';
+            PostData += 1;
+
+        //
+        // This is a percent encoded hex value: ie %2D.
+        //
+
+        } else if (*PostData == '%') {
+            PostData += 1;
+            *Data = 0;
+            for (Index = 0; Index < 2; Index += 1) {
+                *Data <<= 4;
+                if ((*PostData >= 'A') && (*PostData <= 'F')) {
+                    *Data |= *PostData - 'A' + 0xA;
+
+                } else if ((*PostData >= 'a') && (*PostData <= 'f')) {
+                    *Data |= *PostData - 'a' + 0xA;
+
+                } else if ((*PostData >= '0') && (*PostData <= '9')) {
+                    *Data |= *PostData - '0';
+
+                } else {
+                    return -1;
+                }
+
+                PostData += 1;
+            }
+
+        //
+        // Other characters like '&' signify the start of the next field.
+        //
+
+        } else {
+            break;
+        }
+
+        Data += 1;
+    }
+
+    *Data = '\0';
+    return 0;
 }
 
 void
@@ -1138,25 +1617,32 @@ Return Value:
 {
 
     char Buffer[6];
+    int Result;
 
-    //
-    // First receive and empty line.
-    //
+    while (1) {
+        Result = Esp8266ReceiveLine(Buffer, 6);
 
-    if (Esp8266ReceiveLine(Buffer, 6) != 0) {
-        return 1;
-    }
+        //
+        // Allow for any number of empty lines before the OK.
+        //
 
-    //
-    // Then get the OK line.
-    //
+        if (Result == 0) {
+            continue;
+        }
 
-    if (Esp8266ReceiveLine(Buffer, 6) != 2) {
-        return 1;
-    }
+        //
+        // Anything but OK is bad.
+        //
 
-    if ((Buffer[0] != 'O') || (Buffer[1] != 'K')) {
-        return 1;
+        if (Result != 2) {
+            return 1;
+        }
+
+        if ((Buffer[0] != 'O') || (Buffer[1] != 'K')) {
+            return 1;
+        }
+
+        break;
     }
 
     return 0;
@@ -1243,20 +1729,18 @@ Return Value:
 
 {
 
+    const uint8_t *Bytes;
+    uint16_t Index;
+
     //
-    // TODO: Remove this.
+    // This is really only used for debugging, but it's quite handy so I'm
+    // leaving it in.
     //
 
-    {
-
-        const uint8_t *Bytes;
-        uint16_t Index;
-
-        Bytes = Buffer;
-        for (Index = 0; Index < Size; Index += 1) {
-            EvanSend[EvanSendIndex & 0x1FF] = Bytes[Index];
-            EvanSendIndex += 1;
-        }
+    Bytes = Buffer;
+    for (Index = 0; Index < Size; Index += 1) {
+        UartTxBuffer[UartTxIndex & UART_TX_MASK] = Bytes[Index];
+        UartTxIndex += 1;
     }
 
     HAL_UART_Transmit(&Esp8266Uart,
@@ -1365,5 +1849,69 @@ Return Value:
     UartRxConsumer = UartRxProducer;
     Esp8266Uart.ErrorCode = HAL_UART_ERROR_NONE;
     return;
+}
+
+int
+FlashProgram (
+    void *FlashAddress,
+    void *Data,
+    uint32_t Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine programs the flash at the given address.
+
+Arguments:
+
+    FlashAddress - Supplies a pointer to the flash address to program.
+
+    Data - Supplies a pointer to the data to write.
+
+    Size - Supplies the size of the data.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    uint8_t *DataBytes;
+    uint32_t Value;
+    int Status;
+
+    DataBytes = Data;
+    while (Size >= 2) {
+        Value = DataBytes[0] | (DataBytes[1] << 8);
+        Status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,
+                                   (uint32_t)FlashAddress,
+                                   Value);
+
+        if (Status != HAL_OK) {
+            return Status;
+        }
+
+        DataBytes += 2;
+        FlashAddress += 2;
+        Size -= 2;
+    }
+
+    if (Size != 0) {
+        Status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,
+                                   (uint32_t)FlashAddress,
+                                   DataBytes[0]);
+
+        if (Status != HAL_OK) {
+            return Status;
+        }
+    }
+
+    return 0;
 }
 

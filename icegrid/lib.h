@@ -308,3 +308,25 @@ Return Value:
     Returns the integer value.
 
 --*/
+
+uint32_t
+LibScanHexInt (
+    char **String
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads an hexadecimal integer from a string.
+
+Arguments:
+
+    String - Supplies a pointer that on input points to the string to read.
+        On output, this will be advanced beyond the end of the string.
+
+Return Value:
+
+    Returns the integer value.
+
+--*/
