@@ -273,6 +273,8 @@ Return Value:
 
     //
     // Disable temperature sensor.
+    //
+
     RfpWriteByte(RfmRegisterTemperatureSensorControl, 0x00);
     RfpWriteByte(RfmRegisterTemperatureValueOffset, 0x00);
 

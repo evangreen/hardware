@@ -436,6 +436,7 @@ Return Value:
     HlWriteIo(SPI_CONTROL, Value);
     HlInitializeUart(PROCESSOR_HZ);
     KepLoadNonVolatileData();
+    HlStall(5000);
     RfInitialize();
     RfEnterReceiveMode();
     do {
