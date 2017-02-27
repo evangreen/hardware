@@ -295,7 +295,7 @@ Return Value:
 
 uint32_t
 Esp8266Configure (
-    void
+    uint32_t *ClientIp
     );
 
 /*++
@@ -310,7 +310,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    ClientIp - Supplies a pointer where the client IP address will be returned
+        on success.
 
 Return Value:
 
@@ -323,7 +324,7 @@ Return Value:
 
 void
 Esp8266ServeUdpForever (
-    void
+    uint32_t IpAddress
     );
 
 /*++
@@ -334,7 +335,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    IpAddress - Supplies the client IP address, which will be displayed until
+        a connection is received.
 
 Return Value:
 

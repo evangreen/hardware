@@ -117,6 +117,7 @@ Return Value:
 {
 
     uint32_t Error;
+    uint32_t IpAddress;
 
     DbgInititialize();
     HAL_Init();
@@ -126,14 +127,20 @@ Return Value:
     HAL_GPIO_Init(GPIOC, (GPIO_InitTypeDef *)&Pc13Gpio);
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
     Ws2812Initialize();
-    Esp8622Initialize();
-    Error = Esp8266Configure();
-    if (Error != 0) {
+    do {
+        Esp8622Initialize();
+        Error = Esp8266Configure(&IpAddress);
+        if (Error == 0) {
+            break;
+        }
+
         Ws2812ClearDisplay();
         Ws2812OutputBinary(0, 5, Error, LED_COLOR_RED);
-    }
+        HAL_Delay(5000);
 
-    Esp8266ServeUdpForever();
+    } while (Error != 0);
+
+    Esp8266ServeUdpForever(IpAddress);
     while (1) {
         ;
     }

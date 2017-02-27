@@ -376,7 +376,7 @@ Return Value:
 
 uint32_t
 Esp8266Configure (
-    void
+    uint32_t *ClientIp
     )
 
 /*++
@@ -391,7 +391,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    ClientIp - Supplies a pointer where the client IP address will be returned
+        on success.
 
 Return Value:
 
@@ -475,7 +476,7 @@ Return Value:
             (Ssid[0] != '\0')) {
 
             CredentialsOk = 1;
-            Color = LED_COLOR_YELLOW;
+            Color = LED_COLOR_CYAN;
         }
 
         Esp8266IpAddress = IpAddress;
@@ -563,6 +564,7 @@ Return Value:
         }
 
         Ws2812DisplayIp(IpAddress, LED_COLOR_GREEN);
+        *ClientIp = IpAddress;
         break;
     }
 
@@ -574,7 +576,7 @@ ConfigureEnd:
 
 void
 Esp8266ServeUdpForever (
-    void
+    uint32_t IpAddress
     )
 
 /*++
@@ -585,7 +587,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    IpAddress - Supplies the client IP address, which will be displayed until
+        a connection is received.
 
 Return Value:
 
@@ -599,6 +602,9 @@ Return Value:
     int32_t DataSize;
     char Line[160];
     int LineSize;
+    char SeenAnything;
+
+    SeenAnything = 0;
 
     //
     // Fire up a UDP connection. CIPSTART takes the form:
@@ -612,6 +618,10 @@ Return Value:
     while (1) {
         LineSize = Esp8266ReceiveLine(Line, sizeof(Line) - 1);
         if (LineSize < 8) {
+            if (SeenAnything == 0) {
+                Ws2812DisplayIp(IpAddress, LED_COLOR_GREEN);
+            }
+
             continue;
         }
 
@@ -631,6 +641,7 @@ Return Value:
 
             Current[DataSize] = '\0';
             IceGridProcessData(Current);
+            SeenAnything = 1;
         }
     }
 
