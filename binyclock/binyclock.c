@@ -36,8 +36,8 @@ Environment:
 //
 
 #define DEFAULT_YEAR 2011
-#define DEFAULT_MONTH 10
-#define DEFAULT_DATE 4
+#define DEFAULT_MONTH 1
+#define DEFAULT_DATE 11
 #define DEFAULT_WEEKDAY 2
 #define DEFAULT_HOUR 0
 #define DEFAULT_MINUTE 0
@@ -278,7 +278,7 @@ volatile ULONG HlRawMilliseconds;
 // Store the various strings used.
 //
 
-CHAR KeBirthdayMessage[] PROGMEM = "Happy Birthday Jason! ";
+CHAR KeBirthdayMessage[] PROGMEM = "Happy Birthday Caitlin! ";
 CHAR KeJanuaryString[] PROGMEM = "January";
 CHAR KeFebruaryString[] PROGMEM = "February";
 CHAR KeMarchString[] PROGMEM = "March";
