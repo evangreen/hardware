@@ -140,10 +140,10 @@ def convert_to_color(code):
         return code_to_color["unknown"]
 
 def get_forecast(location):
-    #data = fetch_data(location)
-    f = open(location_to_path(location), 'r')
-    data = json.loads(f.read())
-    f.close()
+    data = fetch_data(location)
+    #f = open(location_to_path(location), 'r')
+    #data = json.loads(f.read())
+    #f.close()
     simple_forecast = data['forecast']['simpleforecast']['forecastday']
     codes = []
     for day in range(0, 5):
