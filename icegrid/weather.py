@@ -176,4 +176,4 @@ def update_leds():
 while True:
     print(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
     update_leds()
-    time.sleep(3600 * 6)
+    time.sleep(3600)
