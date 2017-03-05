@@ -5,9 +5,10 @@ argv = sys.argv
 UDP_PORT = 8080
 
 if len(argv) < 3:
-    UDP_IP = "192.168.1.101"
+    UDP_IP = "192.168.1.147"
     if len(argv) < 2:
-        MESSAGE = "FF00FF,FF0000,00FF00,0000FF,00FFFF,FFFF00,FFFFFF,808080,FF8000,FF99CC,FFCCE5,202020,4C9900,FF99FF,FF007F,9999FF"
+        #          0,     10     30     40     50     60     70     80     90     100    120    rain?  rain!  snow?  snow!
+        MESSAGE = "FF8000,0000FF,3008FF,6000FF,A00090,C010C0,C080A0,E03040,FF0020,FF0000,FF3000,004000,30FF00,008080,40FFFF"
 
     else:
         MESSAGE = argv[1];
