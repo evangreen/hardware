@@ -29,6 +29,7 @@ icon_to_code = {
     'chancetstorms': 'chancerain',
     'flurries': 'snow',
     'sleet': 'snow',
+    'snow': 'snow',
     'rain': 'rain',
     'tstorms': 'rain'
 }
