@@ -40,8 +40,8 @@ endif
 #
 
 ifeq (Windows_NT, $(OS))
-BINROOT = $(subst /,\,$(CURDIR))\$(ARCH)bin
-OBJROOT = $(subst /,\,$(CURDIR))\$(ARCH)obj
+BINROOT = $(subst \,/,$(CURDIR))/$(ARCH)bin
+OBJROOT = $(subst \,/,$(CURDIR))/$(ARCH)obj
 else
 BINROOT = $(CURDIR)/x86bin
 OBJROOT = $(CURDIR)/x86obj
@@ -75,7 +75,7 @@ VPATH = .:$(OBJROOT)
 #
 
 CCOPTIONS = -Wall -Werror -Os -gstabs+ -I.
-LDOPTIONS = -Wl,-Map=$@.map
+LDOPTIONS = -Wl,-Map=$@.map -liphlpapi
 
 #
 # Assembler flags:
@@ -96,40 +96,21 @@ all: $(OBJROOT) $(BINROOT) $(BINARY)
 
 $(BINARY): $(OBJS) $(TARGETLIBS)
 	@echo Linking - $@
-ifeq (Windows_NT, $(OS))
-	@cd $(OBJROOT) && $(CC) -o $@ $^ -liphlpapi
-	@echo Binplacing - $(OBJROOT)\$(BINARY)
-	@xcopy /Y /I /Q $(OBJROOT)\$(BINARY) $(BINROOT)\ > nul
-else
-	@cd $(OBJROOT) && $(CC) -o $@ $^
+	@cd $(OBJROOT) && $(CC) -o $@ $^ $(LDOPTIONS)
 	@echo Binplacing - $(OBJROOT)/$(BINARY)
 	@cp $(OBJROOT)/$(BINARY) $(BINROOT)/
-endif
 
 
 $(OBJROOT):
-ifeq (Windows_NT, $(OS))
-	-@mkdir $(OBJROOT) > nul
-	-@mkdir $(OBJROOT)\x86 > nul
-else
-	-@mkdir $(OBJROOT) > /dev/null
-endif
+	-@mkdir $(OBJROOT)
+
 
 $(BINROOT):
-ifeq (Windows_NT, $(OS))
-	-@mkdir $(BINROOT) > nul
-else
-	-@mkdir $(BINROOT) > /dev/null
-endif
+	-@mkdir $(BINROOT)
 
-wipe:
-ifeq (Windows_NT, $(OS))
-	-rmdir /s /q $(OBJROOT)
-	-rmdir /s /q $(BINROOT)
-else
+clean:
 	-rm -rf $(OBJROOT)
 	-rm -rf $(BINROOT)
-endif
 
 #
 # Generic target specifying how to compile a file.

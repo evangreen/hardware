@@ -243,12 +243,10 @@ Return Value:
     int ProcessorUsageThisTime;
     BOOL Result;
     ULONGLONG TickCount;
-    ULONG TotalBytesReceived;
     int UploadSpeed;
     int WordsPerMinute;
     int WordsPerMinuteThisPeriod;
 
-    TotalBytesReceived = 0;
     memset(&AppContext, 0, sizeof(APP_CONTEXT));
     AppContext.SerialPort = INVALID_HANDLE_VALUE;
     printf("PC Dashboard, Version 1.00\n");
@@ -636,13 +634,10 @@ Return Value:
 
 {
 
-    //ULONG ByteCount;
     PDASHBOARD_CONFIGURATION Dashboard;
     BOOL Result;
-    ULONG TotalBytesReceived;
     INT UserInput;
 
-    TotalBytesReceived = 0;
     printf("PC Dashboard, Version 1.00\n");
     Dashboard = malloc(DASHBOARD_BUFFER_SIZE);
     if (Dashboard == NULL) {
@@ -908,7 +903,7 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    PSTR CurrentString;
+    LPBYTE CurrentString;
     DWORD MaxValueLength;
     DWORD MaxValueNameLength;
     DWORD NameLength;
@@ -996,7 +991,7 @@ Return Value:
     // Loop through all the values in the key.
     //
 
-    CurrentString = SerialPorts;
+    CurrentString = (LPBYTE)SerialPorts;
     ValueIndex = 0;
     while (TRUE) {
         memset(CurrentString, 0, AllocationSize);
