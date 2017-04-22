@@ -22,22 +22,22 @@
 
 BINARY := icegrid
 
-OBJS := esp8266.o                     \
-        icegrid.o                     \
-        lib.o                         \
-        ws2812.o                      \
-        CMSIS/STM32F1xx/gcc/startup_stm32f103xb.o \
-        libaeabi-cortexm0/llsr.o \
-        CMSIS/STM32F1xx/system_stm32f1xx.o \
-        HAL/Src/stm32f1xx_hal.o \
-        HAL/Src/stm32f1xx_hal_cortex.o \
-        HAL/Src/stm32f1xx_hal_flash.o \
-        HAL/Src/stm32f1xx_hal_flash_ex.o \
-        HAL/Src/stm32f1xx_hal_rcc.o \
-        HAL/Src/stm32f1xx_hal_gpio.o \
-        HAL/Src/stm32f1xx_hal_tim.o  \
-        HAL/Src/stm32f1xx_hal_dma.o \
-        HAL/Src/stm32f1xx_hal_uart.o \
+OBJS := esp8266.o                                            \
+        icegrid.o                                            \
+        ../stm32f1/lib.o                                     \
+        ws2812.o                                             \
+        ../stm32f1/CMSIS/STM32F1xx/gcc/startup_stm32f103xb.o \
+        ../stm32f1/libaeabi-cortexm0/llsr.o                  \
+        ../stm32f1/CMSIS/STM32F1xx/system_stm32f1xx.o        \
+        ../stm32f1/HAL/Src/stm32f1xx_hal.o                   \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_cortex.o            \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_flash.o             \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_flash_ex.o          \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_rcc.o               \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_gpio.o              \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_tim.o               \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_dma.o               \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_uart.o              \
 
 MCU=STM32F103xB
 
@@ -57,12 +57,13 @@ SERIAL_NUMBER = $(REVISION)-$(BUILD_TIME)
 #
 
 CCOPTIONS = -Wall -Werror -Os -g -D$(MCU) -DSERIAL_NUMBER=\"$(SERIAL_NUMBER)\" \
- -IHAL/Inc -ICMSIS/Include -I. -ICMSIS/STM32F1xx/Include -DNDEBUG=1 \
+ -I../stm32f1/HAL/Inc -I../stm32f1/CMSIS/Include -I. \
+ -I../stm32f1/CMSIS/STM32F1xx/Include -I../stm32f1 -DNDEBUG=1 \
  -mthumb -mcpu=cortex-m3 -mfloat-abi=soft -ffunction-sections -fdata-sections \
  -static
 
 LDOPTIONS = -g -Wl,-Map=$@.map -nostdlib -nostartfiles -nodefaultlibs \
- -Wl,--gc-sections -T STM32F103XB_FLASH.ld  \
+ -Wl,--gc-sections -T ../stm32f1/STM32F103XB_FLASH.ld  \
 
 #
 # Makefile targets. .PHONY specifies that the following targets don't actually

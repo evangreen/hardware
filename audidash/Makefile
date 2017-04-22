@@ -24,19 +24,19 @@ BINARY := audidash
 
 OBJS := audidash.o                    \
         esp8266.o                     \
-        ../icegrid/lib.o              \
-        ../icegrid/CMSIS/STM32F1xx/gcc/startup_stm32f103xb.o \
-        ../icegrid/libaeabi-cortexm0/llsr.o \
-        ../icegrid/CMSIS/STM32F1xx/system_stm32f1xx.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal_cortex.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal_flash.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal_flash_ex.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal_rcc.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal_gpio.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal_tim.o  \
-        ../icegrid/HAL/Src/stm32f1xx_hal_dma.o \
-        ../icegrid/HAL/Src/stm32f1xx_hal_uart.o \
+        ../stm32f1/lib.o              \
+        ../stm32f1/CMSIS/STM32F1xx/gcc/startup_stm32f103xb.o \
+        ../stm32f1/libaeabi-cortexm0/llsr.o \
+        ../stm32f1/CMSIS/STM32F1xx/system_stm32f1xx.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_cortex.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_flash.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_flash_ex.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_rcc.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_gpio.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_tim.o  \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_dma.o \
+        ../stm32f1/HAL/Src/stm32f1xx_hal_uart.o \
 
 MCU=STM32F103xB
 
@@ -56,14 +56,14 @@ SERIAL_NUMBER = $(REVISION)-$(BUILD_TIME)
 #
 
 CCOPTIONS = -Wall -Werror -Os -g -D$(MCU) -DSERIAL_NUMBER=\"$(SERIAL_NUMBER)\" \
- -I../icegrid \
- -I../icegrid/HAL/Inc -I../icegrid/CMSIS/Include -I. \
- -I../icegrid/CMSIS/STM32F1xx/Include -DNDEBUG=1 \
+ -I../stm32f1 \
+ -I../stm32f1/HAL/Inc -I../stm32f1/CMSIS/Include -I. \
+ -I../stm32f1/CMSIS/STM32F1xx/Include -DNDEBUG=1 \
  -mthumb -mcpu=cortex-m3 -mfloat-abi=soft -ffunction-sections -fdata-sections \
  -static
 
 LDOPTIONS = -g -Wl,-Map=$@.map -nostdlib -nostartfiles -nodefaultlibs \
- -Wl,--gc-sections -T STM32F103XB_FLASH.ld  \
+ -Wl,--gc-sections -T ../stm32f1/STM32F103XB_FLASH.ld \
 
 #
 # Makefile targets. .PHONY specifies that the following targets don't actually

@@ -47,9 +47,6 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-volatile long MyGlobal = 0x12348888;
-volatile long MyVar = 0;
-
 const GPIO_InitTypeDef Pc13Gpio = {
     .Pin = GPIO_PIN_13,
     .Mode = GPIO_MODE_OUTPUT_PP,
@@ -91,7 +88,6 @@ const RCC_ClkInitTypeDef ClkParameters = {
 // ------------------------------------------------------------------ Functions
 //
 
-__NORETURN
 int
 main (
     void

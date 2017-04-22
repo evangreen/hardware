@@ -95,8 +95,6 @@ AudiDashSetParameters (
 // -------------------------------------------------------------------- Globals
 //
 
-volatile long MyGlobal = 0x12348888;
-
 //
 // Configure the main oscillator to run off of HSE (high speed external).
 // It's an 8MHz crystal, so 8 / PreDiv1 * Mul = 8 / 1 * 9 = 72MHz.
