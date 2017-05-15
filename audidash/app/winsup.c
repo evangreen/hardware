@@ -35,6 +35,7 @@ Environment:
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
+#include <ddk/ntdddisk.h>
 #include <stdio.h>
 #include "ossup.h"
 
@@ -45,8 +46,6 @@ Environment:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-typedef ULONG NTSTATUS;
 
 //
 // Taken from https://groups.google.com/group/comp.os.ms-windows.programmer.
@@ -169,6 +168,14 @@ ULONGLONG LastNetworkBytesReceived;
 ULONGLONG LastNetworkSystemTime;
 
 //
+// Store the last disk snapshot.
+//
+
+ULONGLONG LastDiskIoRead;
+ULONGLONG LastDiskIoWritten;
+ULONGLONG LastDiskIoTime;
+
+//
 // Keep track of keys pressed by the user.
 //
 
@@ -176,6 +183,16 @@ volatile int KeyPresses;
 volatile int BackspacePresses;
 volatile int RightControlKeyPresses;
 volatile int LeftControlKeyPresses;
+
+//
+// Keep track of the last mouse position and movement.
+//
+
+volatile POINT LastMousePosition;
+volatile POINT MouseTravel;
+volatile LONG DownClicks;
+volatile LONG UpClicks;
+volatile LONG WheelClicks;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -736,6 +753,104 @@ GetNetworkUsageEnd:
 }
 
 int
+GetDiskUsage (
+    int *DiskIoRate
+    )
+
+/*++
+
+Routine Description:
+
+    This routine queries the overall disk utilization.
+
+Arguments:
+
+    DiskIoRate - Supplies a pointer where the disk I/O rate in kilobytes per
+        second will be returned.
+
+Return Value:
+
+    Non-zero on success.
+
+    0 on failure.
+
+--*/
+
+{
+
+    DWORD Bytes;
+    DISK_PERFORMANCE DiskInfo;
+    ULONG Drive;
+    DWORD Drives;
+    CHAR DriveString[7];
+    HANDLE Handle;
+    ULONGLONG BytesPerMillisecond;
+    BOOL Result;
+    ULONGLONG TickCount;
+    ULONGLONG TotalRead;
+    ULONGLONG TotalWritten;
+
+    *DiskIoRate = 0;
+    TotalRead = 0;
+    TotalWritten = 0;
+    memcpy(DriveString, "\\\\.\\C:", sizeof(DriveString));
+    Drives = GetLogicalDrives();
+    for (Drive = 0; (Drives != 0) && (Drive < 26); Drive += 1) {
+        if ((Drives & (1 << Drive)) == 0) {
+            continue;
+        }
+
+        Drives &= ~(1 << Drive);
+        DriveString[4] = 'A' + Drive;
+        Handle = CreateFile(DriveString,
+                            FILE_READ_ATTRIBUTES,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE,
+                            NULL,
+                            OPEN_EXISTING,
+                            0,
+                            NULL);
+
+        if (Handle != INVALID_HANDLE_VALUE) {
+            Result = DeviceIoControl(Handle,
+                                     IOCTL_DISK_PERFORMANCE,
+                                     NULL,
+                                     0,
+                                     &DiskInfo,
+                                     sizeof(DiskInfo),
+                                     &Bytes,
+                                     NULL);
+
+            if (Result != FALSE) {
+                TotalRead += DiskInfo.BytesRead.QuadPart;
+                TotalWritten += DiskInfo.BytesWritten.QuadPart;
+            }
+
+            CloseHandle(Handle);
+        }
+    }
+
+    TickCount = GetTickCount();
+    if (LastDiskIoTime != 0) {
+        BytesPerMillisecond = (TotalRead + TotalWritten -
+                               (LastDiskIoRead + LastDiskIoWritten)) /
+                              (TickCount - LastDiskIoTime);
+
+        //
+        // Bytes | 1000 ms | kb        kb
+        // ------------------------- = ---   call it a wash.
+        // ms    | s       | 1024 b    s
+        //
+
+        *DiskIoRate = BytesPerMillisecond;
+    }
+
+    LastDiskIoRead = TotalRead;
+    LastDiskIoWritten = TotalWritten;
+    LastDiskIoTime = TickCount;
+    return 1;
+}
+
+int
 GetCurrentDateAndTime (
     int *Year,
     int *Month,
@@ -842,10 +957,13 @@ Arguments:
 
     Code - Supplies the code information. If this is less than zero, this
         routine should pass the message on without further processing.
-        If it is HC_ACTIOn, then the parameters contain valid information.
+        If it is HC_ACTION, then the parameters contain valid information.
 
     WParameter - Supplies the action, which is usually WM_KEYDOWN, WM_KEYUP,
         WM_SYSKEYDOWN, or WM_SYSKEYUP.
+
+    LParameter - Supplies an additional parameter, containing a pointer to the
+        message parameters.
 
 Return Value:
 
@@ -882,7 +1000,98 @@ Return Value:
 
             default:
                 KeyPresses += 1;
+                break;
             }
+        }
+    }
+
+    return CallNextHookEx(NULL, Code, WParameter, LParameter);
+}
+
+LRESULT
+CALLBACK
+LowLevelMouseHook (
+    int Code,
+    WPARAM WParameter,
+    LPARAM LParameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the low level keyboard hook.
+
+Arguments:
+
+    Code - Supplies the code information. If this is less than zero, this
+        routine should pass the message on without further processing.
+        If it is HC_ACTION, then the parameters contain valid information.
+
+    WParameter - Supplies the action, which is usually WM_LBUTTONDOWN,
+        WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_MOUSEHWHEEL,
+        WM_RBUTTONDOWN, or WM_RBUTTONUP.
+
+    LParameter - Supplies an additional parameter, containing a pointer to the
+        message parameters.
+
+Return Value:
+
+    Returns the value of calling CallNextHookEx.
+
+--*/
+
+{
+
+    POINT Movement;
+    PMSLLHOOKSTRUCT Parameters;
+    PPOINT Position;
+
+    if (Code == HC_ACTION) {
+        Parameters = (PMSLLHOOKSTRUCT)LParameter;
+        switch (WParameter) {
+        case WM_MOUSEMOVE:
+            Position = &(Parameters->pt);
+            if ((LastMousePosition.x | LastMousePosition.y) != 0) {
+                Movement.x = Position->x - LastMousePosition.x;
+                if (Movement.x < 0) {
+                    Movement.x = -Movement.x;
+                }
+
+                Movement.y = Position->y - LastMousePosition.y;
+                if (Movement.y < 0) {
+                    Movement.y = -Movement.y;
+                }
+
+                MouseTravel.x += Movement.x;
+                MouseTravel.y += Movement.y;
+            }
+
+            LastMousePosition = *Position;
+            break;
+
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+            DownClicks += 1;
+            break;
+
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+            UpClicks += 1;
+            break;
+
+        case WM_MOUSEWHEEL:
+            Movement.x = (SHORT)(Parameters->mouseData >> 16);
+            Movement.x /= WHEEL_DELTA;
+            if (Movement.x < 0) {
+                Movement.x = -Movement.x;
+            }
+
+            WheelClicks += Movement.x;
+            break;
+
+        default:
+            break;
         }
     }
 
@@ -914,6 +1123,7 @@ Return Value:
 {
 
     HHOOK LowLevelKeyboardHookHandle;
+    HHOOK LowLevelMouseHookHandle;
     MSG Message;
 
     //
@@ -927,6 +1137,16 @@ Return Value:
 
     if (LowLevelKeyboardHookHandle == NULL) {
         printf("Error: Unable to install low level keyboard hook. %d\n",
+               (int)GetLastError());
+    }
+
+    LowLevelMouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL,
+                                               LowLevelMouseHook,
+                                               GetModuleHandle(0),
+                                               0);
+
+    if (LowLevelMouseHookHandle == NULL) {
+        printf("Error: Unable to install low level mouse hook: %d\n",
                (int)GetLastError());
     }
 

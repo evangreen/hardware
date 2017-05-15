@@ -26,12 +26,14 @@ Environment:
 
 #include <assert.h>
 #include <getopt.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ossup.h"
 
 #include <windows.h>
+
+#include "ossup.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -70,12 +72,35 @@ Environment:
 #define PROCESSOR_USAGE_DENOMINATOR \
     (PROCESSOR_USAGE_THIS_PERIOD_WEIGHT + PROCESSOR_USAGE_LAST_PERIOD_WEIGHT)
 
-#define FUEL_TANK_MINUTES 120
-#define REFUEL_FACTOR 6
+#define NETWORK_SPEED_THRESHOLD 300
 
-#define DOWNLOAD_SPEED_THRESHOLD 300
-#define UPLOAD_SPEED_THRESHOLD 100
+//
+// Define the number of ticks that constitutes a "break" from using the
+// computer.
+//
 
+#define IDLE_BREAK_TICKS (5 * 60 * 1000)
+
+//
+// Define the maximum time of contiugous use before the user is warned to take
+// a short break.
+//
+
+#define BREAK_WARNING_TICKS (60 * 60 * 1000)
+
+//
+// Define the span of the temperature gauge in time ticks. It will go from
+// completely cold to completely hot in this time.
+//
+
+#define TEMP_TICK_RANGE (2 * 3600 * 1000)
+
+//
+// Define the multiplier by which the user earns back usage time after the
+// break period.
+//
+
+#define REPLENISH_FACTOR 2
 
 //
 // Define dashboard lights.
@@ -87,8 +112,8 @@ Environment:
 #define DASHA_ABS (1 << 6)
 #define DASHA_HEADLIGHTS (1 << 7)
 
-#define DASHA_DEFAULT_SET \
-    (DASHA_COOLANT_WARNING | DASHA_AIRBAG | DASHA_ABS)
+#define DASHA_ACTIVE_LOW (DASHA_COOLANT_WARNING | DASHA_AIRBAG | DASHA_ABS)
+#define DASHA_DEFAULT_SET 0
 
 //
 // Define port B pins.
@@ -106,9 +131,8 @@ Environment:
 #define DASHB_TURN_LEFT (1 << 14)
 #define DASHB_HIGH_BEAM (1 << 15)
 
-#define DASHB_DEFAULT_SET \
-    (DASHB_BRAKE_PAD | DASHB_IGNITION)
-
+#define DASHB_ACTIVE_LOW DASHB_BRAKE_PAD
+#define DASHB_DEFAULT_SET DASHB_IGNITION
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -142,6 +166,8 @@ Members:
 
     State - Stores the current dashboard configuration.
 
+    PreviousState - Stores the previous dashboard state.
+
 --*/
 
 typedef struct _APP_CONTEXT {
@@ -150,7 +176,46 @@ typedef struct _APP_CONTEXT {
     int Socket;
     int Options;
     DASHBOARD_CONFIGURATION State;
+    DASHBOARD_CONFIGURATION PreviousState;
 } APP_CONTEXT, *PAPP_CONTEXT;
+
+PSTR PortAPinNames[16] = {
+    "Null0",
+    "Null1",
+    "Null2",
+    "OilWarning",
+    "CoolantWarning",
+    "Airbag",
+    "ABS",
+    "Headlights",
+    "Null8",
+    "Null9",
+    "Null10",
+    "Null11",
+    "Null12",
+    "Null13",
+    "Null14",
+    "Null15"
+};
+
+PSTR PortBPinNames[16] = {
+    "Null0",
+    "Null1",
+    "Null2",
+    "ChargeWarning",
+    "CheckEngine",
+    "ESP",
+    "Tailgate",
+    "BrakePad",
+    "ParkingBrake",
+    "EPC",
+    "Null10",
+    "Null11",
+    "Ign",
+    "Right",
+    "Left",
+    "HighBeam"
+};
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -173,6 +238,13 @@ DestroyCommunications (
 
 VOID
 SetRawConsoleMode (
+    VOID
+    );
+
+BOOL
+TranslateAndSendDashboard (
+    PAPP_CONTEXT AppContext,
+    PDASHBOARD_CONFIGURATION Display
     );
 
 BOOL
@@ -197,6 +269,7 @@ ReceiveData (
 
 VOID
 PrintLastError (
+    VOID
     );
 
 void
@@ -204,9 +277,34 @@ MillisecondSleep (
     unsigned int Milliseconds
     );
 
+USHORT
+TranslateRpm (
+    USHORT Rpm
+    );
+
+USHORT
+TranslateSpeed (
+    USHORT Mph
+    );
+
+USHORT
+TranslateOil (
+    USHORT PerMille
+    );
+
+USHORT
+TranslateFuel (
+    USHORT PerMille
+    );
+
+USHORT
+TranslateTemp (
+    USHORT PerMille
+    );
+
 VOID
-TranslateGauges (
-    PDASHBOARD_CONFIGURATION Display
+PrintState (
+    PDASHBOARD_CONFIGURATION State
     );
 
 //
@@ -255,29 +353,38 @@ Return Value:
 {
 
     PSTR AfterScan;
+    int AverageDiskRate;
     APP_CONTEXT AppContext;
-//    BOOL ActivityThisMinute;
-//    PSTR ArgumentSwitch;
-//    ULONG ContinuousActivityTicks;
+    BOOL ActivityThisMinute;
+    int Clicks;
+    ULONG CurrentMouseTravel;
     PDASHBOARD_CONFIGURATION Dashboard;
-//    int DownloadSpeed;
-//    int FuelPercent;
-//    int Hour;
-//    ULONG LastMinuteTicks;
-//    int LoopCount;
-//    int MemoryUsage;
-//    int MinutesWithoutActivity;
+    int DiskIoRate;
+    int DownloadSpeed;
+    int Hour;
+    ULONG IdleTicks;
+    ULONG LastMinuteTicks;
+    ULONG LastMouseTravel;
+    int LoopCount;
+    int MemoryUsage;
+    int MaxDiskRate;
+    int MaxNetworkSpeed;
+    int NetworkSpeed;
     int Option;
-//    int PressesThisTime;
-//    ULONGLONG PreviousTickCount;
-//    int ProcessorUsage;
-//    int ProcessorUsageThisTime;
+    int PerMille;
+    int PressesThisTime;
+    ULONGLONG PreviousTickCount;
+    int ProcessorUsage;
+    int ProcessorUsageThisTime;
     BOOL Result;
     int Status;
-//    ULONGLONG TickCount;
-//    int UploadSpeed;
-//    int WordsPerMinute;
-//    int WordsPerMinuteThisPeriod;
+    ULONG TempTicks;
+    ULONGLONG TickCount;
+    ULONG TimeSinceBreak;
+    int UploadSpeed;
+    int Wheels;
+    int WordsPerMinute;
+    int WordsPerMinuteThisPeriod;
 
     memset(&AppContext, 0, sizeof(APP_CONTEXT));
     AppContext.Port = DEFAULT_PORT;
@@ -378,20 +485,29 @@ Return Value:
         goto mainEnd;
     }
 
-#if 0
-
     //
     // This is the main run loop.
     //
 
-    MinutesWithoutActivity = 0;
-    ContinuousActivityTicks = FUEL_TANK_MINUTES * 60 * 1000 / 2;
+    AverageDiskRate = 0;
+    Clicks = 0;
+    DiskIoRate = 0;
+    DownloadSpeed = 0;
+    TempTicks = TEMP_TICK_RANGE / 2;
     ActivityThisMinute = FALSE;
     ProcessorUsage = 0;
+    LastMouseTravel = 0;
     LoopCount = 149;
+    MaxDiskRate = 0;
+    MaxNetworkSpeed = 0;
+    CurrentMouseTravel = 0;
+    NetworkSpeed = 0;
     WordsPerMinute = 0;
+    IdleTicks = 1;
     PreviousTickCount = GetTickCount() - 1;
     LastMinuteTicks = PreviousTickCount;
+    TimeSinceBreak = 0;
+    Wheels = 0;
     while (TRUE) {
 
         //
@@ -406,15 +522,12 @@ Return Value:
             PreviousTickCount = TickCount;
         }
 
-        if ((ActivityThisMinute == FALSE) && (PressesThisTime != 0)) {
+        if (PressesThisTime != 0) {
             ActivityThisMinute = TRUE;
         }
 
         if (TickCount - PreviousTickCount != 0) {
-            if (BackspacePresses != 0) {
-                PressesThisTime -= 1;
-            }
-
+            PressesThisTime -= BackspacePresses;
             WordsPerMinuteThisPeriod =  (PressesThisTime * 60000) /
                                         (int)(TickCount - PreviousTickCount);
 
@@ -422,7 +535,6 @@ Return Value:
             // This is the fun factor.
             //
 
-            WordsPerMinuteThisPeriod *= 3;
             WordsPerMinute = ((WordsPerMinuteThisPeriod *
                                WPM_THIS_PERIOD_WEIGHT) +
                               (WordsPerMinute * WPM_LAST_PERIOD_WEIGHT)) /
@@ -432,23 +544,49 @@ Return Value:
                 WordsPerMinute = 0;
             }
 
-            if (WordsPerMinute >= 30) {
-                Dashboard->TachRpm = WordsPerMinute * 10;
-
-            } else {
-                Dashboard->TachRpm = 0;
+            Dashboard->Speed = WordsPerMinute;
+            if (Dashboard->Speed > 160) {
+                Dashboard->Speed = 160;
             }
 
-            if (WordsPerMinute >= 200) {
-                Dashboard->Lights |= DASHBOARD_SEATBELTS;
-                if (WordsPerMinute >= 300) {
-                    Dashboard->Lights |= DASHBOARD_ANTI_LOCK;
+            if (WordsPerMinute >= 30) {
+                Dashboard->PortB |= DASHB_ESP;
+                if (WordsPerMinute >= 60) {
+                    Dashboard->PortB |= DASHB_EPC;
                 }
 
-            } else {
-                Dashboard->Lights &= ~DASHBOARD_SEATBELTS;
-                Dashboard->Lights &= ~DASHBOARD_ANTI_LOCK;
+            } else if (WordsPerMinute < 10) {
+                Dashboard->PortB &= ~(DASHB_ESP | DASHB_EPC);
             }
+
+            //
+            // Track the mouse on the RPMs.
+            //
+
+            CurrentMouseTravel = MouseTravel.x + MouseTravel.y;
+            if ((CurrentMouseTravel - LastMouseTravel) > Dashboard->Rpm) {
+                ActivityThisMinute = TRUE;
+                Dashboard->Rpm = CurrentMouseTravel - LastMouseTravel;
+
+            } else {
+                Dashboard->Rpm = ((Dashboard->Rpm * 9) +
+                                  (CurrentMouseTravel - LastMouseTravel)) / 10;
+            }
+
+            if (Dashboard->Rpm > 8000) {
+                Dashboard->Rpm = 8000;
+            }
+
+            if ((Dashboard->PortB & DASHB_CHECK_ENGINE) != 0) {
+                if (Dashboard->Rpm < 200) {
+                    Dashboard->PortB &= ~DASHB_CHECK_ENGINE;
+                }
+
+            } else if (Dashboard->Rpm > 2000) {
+                Dashboard->PortB |= DASHB_CHECK_ENGINE;
+            }
+
+            LastMouseTravel = CurrentMouseTravel;
         }
 
         //
@@ -459,120 +597,171 @@ Return Value:
         if (LoopCount >= 150) {
             LoopCount = 0;
             GetCurrentDateAndTime(NULL, NULL, NULL, &Hour, NULL, NULL, NULL);
-
-            //
-            // Between 6pm and midnight, turn on the illumination. Between
-            // midnight and 9AM, turn on the illumination if there's any
-            // activity. After 11PM, turn on the bright beams if there's
-            // any activity.
-            //
-
-            if (Hour < 9) {
-                if (ActivityThisMinute != FALSE) {
-                    Dashboard->Lights |= DASHBOARD_ILLUMINATION;
-
-                } else {
-                    Dashboard->Lights &= ~DASHBOARD_ILLUMINATION;
-                }
-
-            } else if (Hour >= 12 + 6) {
-                Dashboard->Lights |= DASHBOARD_ILLUMINATION;
-
-            } else {
-                Dashboard->Lights &= ~DASHBOARD_ILLUMINATION;
-            }
+            Dashboard->PortA &= ~(DASHA_COOLANT_WARNING | DASHA_HEADLIGHTS);
+            Dashboard->PortB &= ~(DASHB_HIGH_BEAM | DASHB_IGNITION |
+                                  DASHB_CHARGE_WARNING | DASHB_BRAKE_PAD);
 
             if ((Hour >= 12 + 11) ||
                 ((Hour < 9) && (ActivityThisMinute != FALSE))) {
 
-                Dashboard->Lights |= DASHBOARD_HIGH_BEAM;
+                Dashboard->PortB |= DASHB_HIGH_BEAM;
+            }
 
-            } else {
-                Dashboard->Lights &= ~DASHBOARD_HIGH_BEAM;
+            if ((Hour >= 12 + 6) || (Hour < 6)) {
+                Dashboard->PortA |= DASHA_HEADLIGHTS;
             }
 
             //
-            // If there's been activity, add it to the continuous activity
-            // timer. Idle activity subtracts at 6 times the speed, but only
-            // after 5 minutes with no activity.
+            // Accumulate active ticks.
             //
 
-            Dashboard->Lights &= ~DASHBOARD_HOLD;
-            Dashboard->Lights &= ~DASHBOARD_POWER;
-            if ((ActivityThisMinute != FALSE) || (MinutesWithoutActivity < 5)) {
-                ContinuousActivityTicks += TickCount - LastMinuteTicks;
-                if (ActivityThisMinute != FALSE) {
-                    Dashboard->Lights |= DASHBOARD_POWER;
-                    MinutesWithoutActivity = 0;
-
-                } else {
-                    MinutesWithoutActivity += 1;
-                    Dashboard->Lights |= DASHBOARD_HOLD;
-                }
+            if (ActivityThisMinute != FALSE) {
+                IdleTicks = 0;
+                TempTicks += TickCount - LastMinuteTicks;
+                TimeSinceBreak += TickCount - LastMinuteTicks;
 
             //
-            // This really is a period of idle activity.
+            // Accumulate idle ticks.
             //
 
             } else {
-                if ((TickCount - LastMinuteTicks) * REFUEL_FACTOR >
-                    ContinuousActivityTicks) {
+                IdleTicks += TickCount - LastMinuteTicks;
+                if (IdleTicks >= IDLE_BREAK_TICKS) {
+                    TimeSinceBreak = 0;
+                    if (TempTicks >=
+                        ((TickCount - LastMinuteTicks) * REPLENISH_FACTOR)) {
 
-                    ContinuousActivityTicks = 0;
+                        Dashboard->PortB |= DASHB_CHARGE_WARNING;
+                        TempTicks -= (TickCount - LastMinuteTicks) *
+                                     REPLENISH_FACTOR;
 
-                } else {
-                    ContinuousActivityTicks -=
-                             (TickCount - LastMinuteTicks) * REFUEL_FACTOR;
+                    } else {
+                        TempTicks = 0;
+                    }
                 }
             }
 
             //
-            // Adjust the fuel gauge and a few lights based on a timer.
+            // The whole dashboard is on if the user has been around in the
+            // last 60 minutes.
             //
 
-            FuelPercent = 100 - ((ContinuousActivityTicks * 100) /
-                                 (FUEL_TANK_MINUTES * 60 * 1000));
-
-            Dashboard->FuelOn = ComputeFuelValue(FuelPercent);
-            if (FuelPercent < 50) {
-                Dashboard->Lights |= DASHBOARD_CHARGE;
-
-            } else {
-                Dashboard->Lights &= ~DASHBOARD_CHARGE;
+            if (IdleTicks <= 60 * 60 * 1000) {
+                Dashboard->PortB |= DASHB_IGNITION;
             }
 
-            if (FuelPercent < 10) {
-                Dashboard->Lights |= DASHBOARD_FUEL;
+            //
+            // If it's been awhile since the last break, warn the user to take
+            // one.
+            //
+
+            if (TimeSinceBreak >= BREAK_WARNING_TICKS) {
+                Dashboard->PortB |= DASHA_COOLANT_WARNING;
 
             } else {
-                Dashboard->Lights &= ~DASHBOARD_FUEL;
+                MaxNetworkSpeed = 0;
+                MaxDiskRate = 0;
             }
+
+            //
+            // Compute the temperature value out of 1024.
+            //
+
+            PerMille = (TempTicks * 1024) / TEMP_TICK_RANGE;
+            if (PerMille >= 1024) {
+                Dashboard->PortB |= DASHB_BRAKE_PAD;
+                PerMille = 1024;
+            }
+
+            Dashboard->Temp = PerMille;
+
+            //
+            // Take down the maximum speeds to adjust their range.
+            //
+
+            MaxNetworkSpeed /= 2;
+
+            //
+            // Advance the minute.
+            //
 
             ActivityThisMinute = FALSE;
             LastMinuteTicks = TickCount;
         }
 
         //
-        // Check on the network every other time or so.
+        // The real ignition test is above, but make it more responsive by
+        // activating it as soon as activity is detected as well.
         //
 
-        if ((LoopCount & 0x1) == 0) {
-            GetNetworkUsage(&DownloadSpeed, &UploadSpeed);
-            if (DownloadSpeed > DOWNLOAD_SPEED_THRESHOLD) {
-                Dashboard->Lights |= DASHBOARD_DOOR;
-
-            } else {
-                Dashboard->Lights &= ~DASHBOARD_DOOR;
-            }
-
-            if (UploadSpeed > UPLOAD_SPEED_THRESHOLD) {
-                Dashboard->Lights |= DASHBOARD_LEVELER;
-
-            } else {
-                Dashboard->Lights &= ~DASHBOARD_LEVELER;
-            }
+        if (ActivityThisMinute != FALSE) {
+            Dashboard->PortB |= DASHB_IGNITION;
         }
 
+        //
+        // Check on the network and disk every other time or so.
+        //
+
+        if ((Dashboard->PortB & DASHB_IGNITION) != 0) {
+            if ((LoopCount & 0x1) == 0) {
+                GetNetworkUsage(&DownloadSpeed, &UploadSpeed);
+                DownloadSpeed += UploadSpeed;
+                if (MaxNetworkSpeed < DownloadSpeed) {
+                    MaxNetworkSpeed = DownloadSpeed;
+                }
+
+                GetDiskUsage(&DiskIoRate);
+                if (MaxDiskRate < DiskIoRate) {
+                    MaxDiskRate = DiskIoRate;
+                }
+            }
+
+        } else {
+            DownloadSpeed = 0;
+            DiskIoRate = 0;
+        }
+
+        //
+        // Go up quickly but decay slowly for a smoother but slightly
+        // hyperbolic graph.
+        //
+
+        if (DownloadSpeed > NetworkSpeed) {
+            NetworkSpeed = DownloadSpeed;
+
+        } else {
+            NetworkSpeed = ((NetworkSpeed * 9) + DownloadSpeed) / 10;
+        }
+
+        if (DiskIoRate > AverageDiskRate) {
+            AverageDiskRate = DiskIoRate;
+
+        } else {
+            AverageDiskRate = ((AverageDiskRate * 9) + DiskIoRate) / 10;
+        }
+
+        //
+        // Send it out to the oil gauge, which adjusts to whatever the
+        // most recent max is.
+        //
+
+        PerMille = 0;
+        if (MaxNetworkSpeed != 0) {
+            PerMille = (NetworkSpeed * 1024) / MaxNetworkSpeed;
+        }
+
+        Dashboard->Oil = PerMille;
+        Dashboard->PortB &= ~DASHB_TAILGATE;
+        if (DownloadSpeed > NETWORK_SPEED_THRESHOLD) {
+            Dashboard->PortB |= DASHB_TAILGATE;
+        }
+
+        PerMille = 0;
+        if (MaxDiskRate != 0) {
+            PerMille = (AverageDiskRate * 1024) / MaxDiskRate;
+        }
+
+        Dashboard->Fuel = 1024 - PerMille;
         GetProcessorAndMemoryUsage(&ProcessorUsageThisTime,
                                    &MemoryUsage);
 
@@ -582,63 +771,71 @@ Return Value:
                            PROCESSOR_USAGE_LAST_PERIOD_WEIGHT)) /
                          PROCESSOR_USAGE_DENOMINATOR;
 
-        Dashboard->TempOn = ComputeTemperatureValue(ProcessorUsage / 10);
+        Dashboard->PortA &= ~DASHA_OIL_WARNING;
+        Dashboard->PortB &= ~(DASHB_PARKING_BRAKE);
         if (ProcessorUsage >= 50 * 10) {
-            Dashboard->Lights |= DASHBOARD_OIL;
-
-        } else {
-            Dashboard->Lights &= ~DASHBOARD_OIL;
-        }
-
-        if (ProcessorUsage >= 75 * 10) {
-            Dashboard->Lights |= DASHBOARD_CHECK_ENGINE;
-
-        } else {
-            Dashboard->Lights &= ~DASHBOARD_CHECK_ENGINE;
+            Dashboard->PortA |= DASHA_OIL_WARNING;
         }
 
         if (BackspacePresses != 0) {
-            Dashboard->Lights |= DASHBOARD_BRAKE;
+            Dashboard->PortB |= DASHB_PARKING_BRAKE;
             BackspacePresses -= 1;
-
-        } else {
-            Dashboard->Lights &= ~DASHBOARD_BRAKE;
         }
 
-        if ((Dashboard->Lights & DASHBOARD_TURN_LEFT) != 0) {
-            Dashboard->Lights &= ~DASHBOARD_TURN_LEFT;
+        if ((Dashboard->PortB & DASHB_TURN_LEFT) != 0) {
+            Dashboard->PortB &= ~DASHB_TURN_LEFT;
 
         } else {
             if (LeftControlKeyPresses != 0) {
-                Dashboard->Lights |= DASHBOARD_TURN_LEFT;
+                Dashboard->PortB |= DASHB_TURN_LEFT;
                 LeftControlKeyPresses -= 1;
             }
         }
 
-        if ((Dashboard->Lights & DASHBOARD_TURN_RIGHT) != 0) {
-            Dashboard->Lights &= ~DASHBOARD_TURN_RIGHT;
+        if ((Dashboard->PortB & DASHB_TURN_RIGHT) != 0) {
+            Dashboard->PortB &= ~DASHB_TURN_RIGHT;
 
         } else {
             if (RightControlKeyPresses != 0) {
-                Dashboard->Lights |= DASHBOARD_TURN_RIGHT;
+                Dashboard->PortB |= DASHB_TURN_RIGHT;
                 RightControlKeyPresses -= 1;
             }
         }
 
-        Result = SendData(&AppContext,
-                          Dashboard,
-                          sizeof(DASHBOARD_CONFIGURATION));
+        if ((Dashboard->PortA & DASHA_AIRBAG) != 0) {
+            Dashboard->PortA &= ~DASHA_AIRBAG;
 
-        if (Result == FALSE) {
-            printf("Error: Failed to send configuraiton. Please try "
-                   "again.\n");
+        } else if (Clicks < DownClicks) {
+            Clicks += 1;
+            Dashboard->PortA |= DASHA_AIRBAG;
+        }
+
+        Dashboard->PortA &= ~DASHA_ABS;
+        if (Wheels < WheelClicks) {
+            ActivityThisMinute = TRUE;
+            Wheels += 1;
+            Dashboard->PortA |= DASHA_ABS;
+        }
+
+        Status = memcmp(Dashboard,
+                        &(AppContext.PreviousState),
+                        sizeof(*Dashboard));
+
+        if (Status != 0) {
+            Result = TranslateAndSendDashboard(&AppContext, Dashboard);
+            if (Result == FALSE) {
+                printf("Error: Failed to send.");
+
+            } else {
+                memcpy(&(AppContext.PreviousState),
+                       Dashboard,
+                       sizeof(*Dashboard));
+            }
         }
 
         MillisecondSleep(400);
         PreviousTickCount = TickCount;
     }
-
-#endif
 
     Status = 0;
 
@@ -681,8 +878,11 @@ Return Value:
     int Direction;
     PSTR FieldName;
     PUSHORT FieldValue;
+    ULONG High;
+    ULONG Low;
     USHORT Scale;
     INT UserInput;
+    USHORT Value;
     PSTR Verb;
 
     printf("AudiDash debug console");
@@ -713,6 +913,7 @@ Return Value:
            "x - Shift bit right\n"
            "c - Toggle PortA bit\n"
            "v - Toggle PortB bit\n"
+           "b - Binary search mode\n"
            "q - Quit.\n");
 
     Scale = 1;
@@ -838,19 +1039,128 @@ Return Value:
 
         case 'c':
             Dashboard->PortA ^= 1 << Bit;
-            printf("Toggling Port A bit %d (0x%04x), new value 0x%04x\n",
+            printf("Toggling Port A bit %d (0x%04x), %s, new value 0x%04x\n",
                    Bit,
                    1 << Bit,
+                   PortAPinNames[Bit],
                    Dashboard->PortA);
 
             break;
 
         case 'v':
             Dashboard->PortB ^= 1 << Bit;
-            printf("Toggling Port B bit %d (0x%04x), new value 0x%04x\n",
+            printf("Toggling Port B bit %d (0x%04x), %s, new value 0x%04x\n",
                    Bit,
                    1 << Bit,
+                   PortBPinNames[Bit],
                    Dashboard->PortB);
+
+            break;
+
+        //
+        // Binary search mode.
+        //
+
+        case 'b':
+            printf("Binary Search mode. Choose gauge:\n"
+                   "s - Speed\n"
+                   "d - RPM\n"
+                   "f - Fuel\n"
+                   "g - Oil\n"
+                   "h - Temp\n"
+                   "q - Exit binary search mode (any time)\n");
+
+            UserInput = getc(stdin);
+            if (UserInput == -1) {
+                printf("Quitting\n");
+                goto RunDebugModeEnd;
+            }
+
+            FieldValue = NULL;
+            switch (UserInput) {
+            case 's':
+                FieldValue = &(Dashboard->Speed);
+                break;
+
+            case 'd':
+                FieldValue = &(Dashboard->Rpm);
+                break;
+
+            case 'f':
+                FieldValue = &(Dashboard->Fuel);
+                break;
+
+            case 'g':
+                FieldValue = &(Dashboard->Oil);
+                break;
+
+            case 'h':
+                FieldValue = &(Dashboard->Temp);
+                break;
+
+            default:
+            case 'q':
+                break;
+            }
+
+            if (FieldValue == NULL) {
+                printf("Exiting binary search mode\n");
+                break;
+            }
+
+            printf("Selected %c\n"
+                   "--------------\n"
+                   "l - Too low, go higher\n"
+                   "h - Too high, go lower\n"
+                   "q - Stop\n"
+                   "r - Reset boundaries\n"
+                   "--------------\n",
+                   UserInput);
+
+            Low = 0;
+            High = 0x10000;
+            while (FieldValue != NULL) {
+                Value = ((High - Low) / 2) + Low;
+                printf("Range 0x%x - 0x%x: Trying 0x%x (%d)\n",
+                       (unsigned int)Low,
+                       (unsigned int)High,
+                       Value,
+                       Value);
+
+                *FieldValue = Value;
+                if (SendDashboard(AppContext, Dashboard) == FALSE) {
+                    fprintf(stderr,
+                            "Error: Failed to send configuration. "
+                            "Please try again.\n");
+                }
+
+                UserInput = getc(stdin);
+                if (UserInput == -1) {
+                    printf("Quitting\n");
+                    goto RunDebugModeEnd;
+                }
+
+                switch (UserInput) {
+                case 'l':
+                    Low = Value;
+                    break;
+
+                case 'h':
+                    High = Value;
+                    break;
+
+                case 'r':
+                    printf("Resetting\n");
+                    Low = 0;
+                    High = 0x10000;
+                    break;
+
+                case 'q':
+                    FieldValue = NULL;
+                    printf("Ending binary search mode\n");
+                    break;
+                }
+            }
 
             break;
 
@@ -900,6 +1210,7 @@ Return Value:
         }
     }
 
+RunDebugModeEnd:
     return 0;
 }
 
@@ -999,6 +1310,7 @@ Return Value:
 
 VOID
 SetRawConsoleMode (
+    VOID
     )
 
 /*++
@@ -1043,6 +1355,51 @@ Return Value:
     }
 
     return;
+}
+
+BOOL
+TranslateAndSendDashboard (
+    PAPP_CONTEXT AppContext,
+    PDASHBOARD_CONFIGURATION Display
+    )
+
+/*++
+
+Routine Description:
+
+    This routine translates the gauges into raw values and sends the dashboard
+    out. The dashboard configuration structure is left unchanged.
+
+Arguments:
+
+    AppContext - Supplies a pointer to the application context.
+
+    Display - Supplies a pointer to the display values to send.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+{
+
+    DASHBOARD_CONFIGURATION Raw;
+
+    if ((AppContext->Options & OPTION_VERBOSE) != 0) {
+        PrintState(Display);
+    }
+
+    Raw.PortA = Display->PortA ^ DASHA_ACTIVE_LOW;
+    Raw.PortB = Display->PortB ^ DASHB_ACTIVE_LOW;
+    Raw.Speed = TranslateSpeed(Display->Speed);
+    Raw.Rpm = TranslateRpm(Display->Rpm);
+    Raw.Fuel = TranslateFuel(Display->Fuel);
+    Raw.Oil = TranslateOil(Display->Oil);
+    Raw.Temp = TranslateTemp(Display->Temp);
+    return SendDashboard(AppContext, &Raw);
 }
 
 BOOL
@@ -1184,6 +1541,7 @@ Return Value:
 
 VOID
 PrintLastError (
+    VOID
     )
 
 /*++
@@ -1289,6 +1647,326 @@ Return Value:
 --*/
 
 {
+
+    Display->Rpm = TranslateRpm(Display->Rpm);
+    Display->Speed = TranslateSpeed(Display->Speed);
+    Display->Oil = TranslateOil(Display->Oil);
+    Display->Fuel = TranslateFuel(Display->Fuel);
+    Display->Temp = TranslateTemp(Display->Temp);
+    return;
+}
+
+USHORT
+TranslateRpm (
+    USHORT Rpm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine translates an RPM value into a timer value.
+
+Arguments:
+
+    Rpm - Supplies the Revolutions per Minute to translate.
+
+Return Value:
+
+    Returns the timer value.
+
+--*/
+
+{
+
+    double Value;
+    USHORT ValueInt;
+
+    Value = pow((double)Rpm, -9.4688728736E-01) * 7.7335240097E05;
+    if (Value > 0xFFFF) {
+        ValueInt = 0xFFFF;
+
+    } else if (Value < 0.0) {
+        ValueInt = 0;
+
+    } else {
+        ValueInt = Value;
+    }
+
+    return ValueInt;
+}
+
+USHORT
+TranslateSpeed (
+    USHORT Mph
+    )
+
+/*++
+
+Routine Description:
+
+    This routine translates a speed value into a timer value.
+
+Arguments:
+
+    Mph - Supplies the Miles per Hour to translate.
+
+Return Value:
+
+    Returns the timer value.
+
+--*/
+
+{
+
+    double Value;
+    USHORT ValueInt;
+
+    Value = pow((double)Mph, -9.9126595079E-01) * 5.0886939410E03;
+    if (Value > 0xFFFF) {
+        ValueInt = 0xFFFF;
+
+    } else if (Value < 0.0) {
+        ValueInt = 0;
+
+    } else {
+        ValueInt = Value;
+    }
+
+    return ValueInt;
+}
+
+USHORT
+TranslateOil (
+    USHORT PerMille
+    )
+
+/*++
+
+Routine Description:
+
+    This routine translates an oil value between 0 and 1024 into a timer value.
+
+Arguments:
+
+    PerMille - Supplies the value between 0 and 1024.
+
+Return Value:
+
+    Returns the timer value.
+
+--*/
+
+{
+
+    double Poly;
+    double Result;
+    double Value;
+    USHORT ResultInt;
+
+    Value = (double)PerMille / 1024.0;
+
+    //
+    // For really small values, the equation gets crazy, so just go linear.
+    //
+
+    if (Value <= 0.375) {
+        Result = (380.0 * Value) - 18.0;
+
+    //
+    // Use the polynomial estimation for the larger values.
+    //
+
+    } else {
+        Result = 1.4179942164E03 - (2.6694701103E04 * Value);
+        Poly = Value * Value;
+        Result += 1.9017257021E05 * Poly;
+        Poly *= Value;
+        Result -= 6.5402727658E05 * Poly;
+        Poly *= Value;
+        Result += 1.1810308656E06 * Poly;
+        Poly *= Value;
+        Result -= 1.0742954781E06 * Poly;
+        Poly *= Value;
+        Result += 3.8934488420E05 * Poly;
+    }
+
+    if (Result > 0xFFFF) {
+        ResultInt = 0xFFFF;
+
+    } else if (Result < 0.0) {
+        ResultInt = 0;
+
+    } else {
+        ResultInt = Result;
+    }
+
+    return ResultInt;
+}
+
+USHORT
+TranslateFuel (
+    USHORT PerMille
+    )
+
+/*++
+
+Routine Description:
+
+    This routine translates an fuel value between 0 and 1024 into a timer value.
+
+Arguments:
+
+    PerMille - Supplies the value between 0 and 1024.
+
+Return Value:
+
+    Returns the timer value.
+
+--*/
+
+{
+
+    double Poly;
+    double Result;
+    double Value;
+    USHORT ResultInt;
+
+    Value = (double)PerMille / 1024.0;
+    Result = 5.0273970394E01 - (4.8747033324E02 * Value);
+    Poly = Value * Value;
+    Result += 8.3008879336E03 * Poly;
+    Poly *= Value;
+    Result -= 4.3334554154E04 * Poly;
+    Poly *= Value;
+    Result += 1.0276467236E05 * Poly;
+    Poly *= Value;
+    Result -= 1.1179209299E05 * Poly;
+    Poly *= Value;
+    Result += 4.5778109629E04 * Poly;
+    if (Result > 0xFFFF) {
+        ResultInt = 0xFFFF;
+
+    } else if (Result < 0.0) {
+        ResultInt = 0;
+
+    } else {
+        ResultInt = Result;
+    }
+
+    return ResultInt;
+}
+
+USHORT
+TranslateTemp (
+    USHORT PerMille
+    )
+
+/*++
+
+Routine Description:
+
+    This routine translates an temp value between 0 and 1024 into a timer value.
+
+Arguments:
+
+    PerMille - Supplies the value between 0 and 1024.
+
+Return Value:
+
+    Returns the timer value.
+
+--*/
+
+{
+
+    double Poly;
+    double Result;
+    double Value;
+    USHORT ResultInt;
+
+    //
+    // Temperature is tricky because there's a big portion that's swallowed
+    // up and seems to sit right in the middle. The graph is severely different
+    // below 0.5 and above 0.5.
+    //
+
+    Value = (double)PerMille / 1024.0;
+    if (PerMille <= 512) {
+        Result = (122.5 * Value) + 61.07;
+
+    } else {
+        Result = 2054.8225 - (7362.5253 * Value);
+        Poly = Value * Value;
+        Result += 8942.0229 * Poly;
+        Poly *= Value;
+        Result -= 2304.1298 * Poly;
+    }
+
+    if (Result > 0xFFFF) {
+        ResultInt = 0xFFFF;
+
+    } else if (Result < 0.0) {
+        ResultInt = 0;
+
+    } else {
+        ResultInt = Result;
+    }
+
+    return ResultInt;
+}
+
+VOID
+PrintState (
+    PDASHBOARD_CONFIGURATION State
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the current dashboard state.
+
+Arguments:
+
+    State - Supplies a pointer to the state to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    int Bit;
+    PSTR First;
+    ULONG Port;
+
+    First = "";
+    Port = State->PortA;
+    for (Bit = 0; Bit < 16; Bit += 1) {
+        if ((Port & (1 << Bit)) != 0) {
+            printf("%s%s", First, PortAPinNames[Bit]);
+            First = ", ";
+        }
+    }
+
+    Port = State->PortB;
+    for (Bit = 0; Bit < 16; Bit += 1) {
+        if ((Port & (1 << Bit)) != 0) {
+            printf("%s%s", First, PortBPinNames[Bit]);
+            First = ", ";
+        }
+    }
+
+    printf("%s%d MPH, %d RPM, Fuel %.2f, Oil %.2f, Temp %.2f\n",
+           First,
+           State->Speed,
+           State->Rpm,
+           (double)State->Fuel / 1024.0,
+           (double)State->Oil / 1024.0,
+           (double)State->Temp / 1024.0);
 
     return;
 }

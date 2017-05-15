@@ -43,6 +43,16 @@ extern volatile int RightControlKeyPresses;
 extern volatile int LeftControlKeyPresses;
 
 //
+// Keep track of the last mouse position and movement.
+//
+
+volatile POINT LastMousePosition;
+volatile POINT MouseTravel;
+volatile LONG DownClicks;
+volatile LONG UpClicks;
+volatile LONG WheelClicks;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 
@@ -175,6 +185,30 @@ Arguments:
         per second will be returned.
 
     UploadSpeed - Supplies a pointer where the upload speed in kilobytes per
+        second will be returned.
+
+Return Value:
+
+    Non-zero on success.
+
+    0 on failure.
+
+--*/
+
+int
+GetDiskUsage (
+    int *DiskIoRate
+    );
+
+/*++
+
+Routine Description:
+
+    This routine queries the overall disk utilization.
+
+Arguments:
+
+    DiskIoRate - Supplies a pointer where the disk I/O rate in kilobytes per
         second will be returned.
 
 Return Value:
