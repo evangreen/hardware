@@ -110,7 +110,7 @@ Environment:
 #define DASHA_COOLANT_WARNING (1 << 4)
 #define DASHA_AIRBAG (1 << 5)
 #define DASHA_ABS (1 << 6)
-#define DASHA_HEADLIGHTS (1 << 7)
+#define DASHA_HEADLIGHTS (1 << 9)
 
 #define DASHA_ACTIVE_LOW (DASHA_COOLANT_WARNING | DASHA_AIRBAG | DASHA_ABS)
 #define DASHA_DEFAULT_SET 0
