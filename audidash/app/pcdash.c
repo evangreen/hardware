@@ -656,7 +656,7 @@ Return Value:
             //
 
             if (TimeSinceBreak >= BREAK_WARNING_TICKS) {
-                Dashboard->PortB |= DASHA_COOLANT_WARNING;
+                Dashboard->PortA |= DASHA_COOLANT_WARNING;
 
             } else {
                 MaxNetworkSpeed = 0;
@@ -667,7 +667,7 @@ Return Value:
             // Compute the temperature value out of 1024.
             //
 
-            PerMille = (TempTicks * 1024) / TEMP_TICK_RANGE;
+            PerMille = ((ULONGLONG)TempTicks * 1024ULL) / TEMP_TICK_RANGE;
             if (PerMille >= 1024) {
                 Dashboard->PortB |= DASHB_BRAKE_PAD;
                 PerMille = 1024;
@@ -747,7 +747,7 @@ Return Value:
 
         PerMille = 0;
         if (MaxNetworkSpeed != 0) {
-            PerMille = (NetworkSpeed * 1024) / MaxNetworkSpeed;
+            PerMille = ((ULONGLONG)NetworkSpeed * 1024ULL) / MaxNetworkSpeed;
         }
 
         Dashboard->Oil = PerMille;
@@ -758,7 +758,7 @@ Return Value:
 
         PerMille = 0;
         if (MaxDiskRate != 0) {
-            PerMille = (AverageDiskRate * 1024) / MaxDiskRate;
+            PerMille = ((ULONGLONG)AverageDiskRate * 1024ULL) / MaxDiskRate;
         }
 
         Dashboard->Fuel = 1024 - PerMille;
