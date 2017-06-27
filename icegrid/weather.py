@@ -168,8 +168,13 @@ def get_led_string(codes):
     return ','.join(values)
 
 def update_leds():
-    codes = get_all_codes()
-    string = get_led_string(codes)
+    if time.localtime().tm_hour < 7:
+        string = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+
+    else:
+        codes = get_all_codes()
+        string = get_led_string(codes)
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM);
     sock.sendto(string + "\r\n", (UDP_IP, UDP_PORT))
     sock.close()
