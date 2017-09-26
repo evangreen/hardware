@@ -3,8 +3,8 @@
 This repository contains a collection of the personal hardware projects I've created over the years. These were created for my own amusement, usually because the idea intrigued me or because I wanted an excuse to try out a specific component or technique.
 
 ### Contents
- - [Matrix](matrix) - Interactive RGB LED matrix ![Matrix](matrix/MatrixFront.jpg)
- - [Binyclock](binyclock) - Tiny binary clock ![Binyclock](binyclock/BinyClock1.jpg)
+ - [Matrix](matrix) - Interactive RGB LED matrix ![Matrix](matrix/MatrixFront.JPG)
+ - [Binyclock](binyclock) - Tiny binary clock ![Binyclock](binyclock/BinyClock1.JPG)
  - [USB LED](usbled) - USB controlled 7-segment LED
  - [USB Relay](usbrelay) - USB controlled high voltage switch
  - [TP Light](tplight) - A simple traffic light made from toilet paper rolls
