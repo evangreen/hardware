@@ -2,6 +2,10 @@
 
 Airlight was a set of two hardware boards I started in 2013 in order to control the traffic lights I've collected in my house. It was also my first foray into the world of Wireless with the RFM22B boards.
 
+![Master Controller](MasterController.JPG)
+![Relay Board](RelayBoard.JPG)
+![Relay Board back](RelayBoardBack.JPG)
+
 ### Design
 
 The system consists of two components: a master board and several identical relay boards (one in each traffic light).
@@ -17,3 +21,8 @@ The relay board receives commands via the RFM22B wireless board into an ATMega16
 Overall the project went very well. I was very pleased with the signal strength of the RFM22B boards. Reception was great anywhere in my admittedly tiny apartment, even though the relay boards were buried inside metal traffic lights. There are a couple of board errata, which were easy enough to fix and should be documented.
 
 One aspect that I'm less than pleased about is the sharing of the SPI bus between the RFM22B and the LEDs on the master board. The RFM22B is very slow to respond, and hogs the bus for long delay periods, meaning every time a wireless command is sent there is visible flickering in the LEDs. If I had known the RFM22B was going to be a so slow I would have wired the LEDs separately, or maybe used something like an HT16K33 to drive the LEDs.
+
+### Pictures
+Some photos of the lights in my apartment
+![Traffic Lights](Lights1.JPG)
+![More Traffic Lights](Lights2.JPG)
