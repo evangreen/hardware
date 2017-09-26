@@ -1,5 +1,9 @@
 # Audidash
 
+![AudiDash](AudiDash1.JPG)
+![AudiDash Again](AudiDash2.JPG)
+![AudiDash Protoboard](AudiDashBoard.JPG)
+
 Audidash is a project I started in 2017 to connect the instrument cluster of a 1998 Audi A4 to my PC. The various indicators and gauges correspond to stats of my machine. For instance, the speed gauge correllates to my words per minute of typing, and the RPM gauge corresponds to my mousing rate. The left and right turn arrows blink when I use the left and right control or shift keys, and so on. It's actually the second PC instrument cluster I've created, though the interface turned out to be completely different from the first instrument cluster I wired up since this one has digital elements.
 
 I got the instrument cluster on eBay for something like twenty or thirty bucks. This particular make/model has significance to me because it's the car I drove in high school (and still do at the time of this writing).

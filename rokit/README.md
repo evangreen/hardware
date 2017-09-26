@@ -15,3 +15,9 @@ This schematic was my attempt at figuring out why that LED was red, and make it 
 Once I replaced that pair of transistors, the LED went green, and the device almost worked. If I turned the volume up enough and the frequency response high enough, it would make occasional grunts with the music. The sound was awful, kind of like the sound of stompy neighbors walking around upstairs.
 
 I don't own an oscilloscope, so debugging sound quality issues is a little above me. So I gave up and bought a Monoprice powered subwoofer as a replacement. I still have my KRK RP5s though, and those are working wonderfully... so far.
+
+### Photos
+![Explosion](KRK_Catastrophe.JPG)
+The yellow stringy area is the completely exploded electrolytic capacitor. It got all over large parts of the board. I'd never seen that before.
+![Disassembly](KRK_Disassembly.JPG)
+A photo of me pulling the back panel out of the woofer cabinet.

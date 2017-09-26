@@ -1,4 +1,8 @@
 # USB Relay
+
+![USB Relay](UsbRelay.JPG)
+![USB Relay Back](UsbRelayBack.JPG)
+
 This was a project I did in the fall of 2011 as a follow-on to the USB LED project from the summer. It utilized the same processor, communication interface, and ULN2803 as the USB LED, except instead of controlling LEDs it controlled triacs capable of switching 120VAC.
 
 # Design

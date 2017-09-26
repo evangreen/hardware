@@ -1,5 +1,8 @@
 # Matrix
 
+![Matrix front](MatrixFront.JPG)
+![Matrix back](MatrixBack.JPG)
+
 Matrix was an RGB LED matrix art project I started in 2010. It was my first hardware project outside of college. The idea was to hang it on a wall, and have it be an interactive display that people could play with. I envisioned it having simulations like Boids and Conway's Game of Life, as well as games like Tetris and Sokoban. For kicks it also contained a blood alcohol sensor that could allow participants to test their level of inebriation, and a microphone to use as an interactive source of randomness. The primary interface was two blackberry trackballs and several buttons. Overall most of it worked, but it contained a few fatal design and implementation flaws, and ultimately I ended up abandoning it before completing the project.
 
 ### Design

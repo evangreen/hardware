@@ -1,4 +1,7 @@
 # Binyclock
+
+![BinyClock](BinyClock1.JPG)
+
 Binyclock, short for tiny binary clock, was a miniature board I made in early 2011. It uses a 5x7 green dot matrix display and at ATMega8 microcontroller to display a binary clock. It also scrolls text occasionally and when the button is pressed indicating the full time and date. I made about ten of these, and gave them out as gifts to friends and family. I also programmed their names and birthdays into each, so it would wish them a happy birthday each year.
 
 ### Usage
@@ -10,3 +13,9 @@ This was my second electronics project outside of college, and I think it went w
 I knew the internal RC oscillator wasn't going to be stable enough to keep time, but I was dismayed to see that the 12MHz crystals I bought also drifted, sometimes by a lot. I tried to compensate for this by adding a calibration offset after measuring each unit over a period of 48 hours. I'm not sure if that really helped, and in one case I think I computed and set a bad calibration value.
 
 Still, it was a fun project, it basically worked in the end, and I think people appreciated the personalized gift. I'll call it a success.
+
+### Photos
+![BinyClock](BinyClock2.JPG)
+![BinyClock Back](BinyClockBack.JPG)
+My remaining stash of BinyClocks
+![BinyClock Stash](BinyClockStash.JPG)

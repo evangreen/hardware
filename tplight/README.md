@@ -1,4 +1,8 @@
 # Toilet Paper Traffic Light
+
+![TP Light Green](TpLightGreen.JPG)
+![TP Light Red](TpLightRed.JPG)
+
 This was a really goofy craft project idea I had back in 2012 to make a traffic light out of toilet paper rolls, ping pong balls, LEDs, and a golf ball box.
 
 I cut the ping pong balls in half, coated one hemisphere with tinfoil for reflectiveness, poked an LED through one "pole", and put a single ply of Kleenex through the equator. I then sealed the two halves of the ping pong balls back together, and attached them to the ends of toilet paper rolls. The three toilet paper rolls sit together nearly perfectly inside a single golf ball box I got from my grandfather. Another toilet paper roll, a leftover sturdy invite card, and some glue gun action finished the job.

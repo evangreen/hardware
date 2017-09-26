@@ -1,5 +1,7 @@
 # Icegrid
 
+![IceGrid](IcegridFinal.JPG)
+
 The icegrid is a 5x3 wireless RGB LED indicator panel made from silicone ice cube trays, strips of WS2812 RGB LEDs, and an ESP8266 wifi board. I built two of these in 2016, and am currently using one to display a five-day weather forecast for three different cities.
 
 # Design
@@ -32,3 +34,11 @@ The LEDs are quite bright, and I ended up needing to program "dark hours", even 
 Occasionally the Python script seems to quit on me. The shortcut on my desktop means the window closes before I can see what the exception is, and I'm too lazy to manually fire up a prompt to see it, since it's on my media PC that has a tiny handheld keyboard. It's probably a temporary network exception, which could be fixed with the right try block around the network part.
 
 I really enjoy this device, and it's quite useful to me as I can quickly glance at it in the morning to get a sense of the weather for the week.
+
+### Photos
+![Icegrid innards](IcegridInsides.JPG)
+The insides of the IceGrid
+![Icegrid Legend](IcegridLegend.JPG)
+Legend for the forecast colors. High temperatures round to nearest 10 degrees (eg. 70 ~ 65-74).
+![Prototype Legend](IcegridPrototypeLegend.JPG)
+Prototype legend before printing the transparency
