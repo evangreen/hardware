@@ -4,26 +4,47 @@ This repository contains a collection of the personal hardware projects I've cre
 
 ### Contents
 ![Matrix](thumbs/Matrix.jpg)
+
 [Matrix](matrix) - Interactive RGB LED matrix
+
 ![Binyclock](thumbs/BinyClock.jpg)
+
 [Binyclock](binyclock) - Tiny binary clock
+
 ![USB LED Mini](thumbs/UsbLedMini.jpg)
+
 [USB LED](usbled) - USB controlled 7-segment LED
+
 ![USB Relay](thumbs/UsbRelay.jpg)
+
 [USB Relay](usbrelay) - USB controlled high voltage switch
+
 ![TP Light](thumbs/TpLight.jpg)
+
 [TP Light](tplight) - A simple traffic light made from toilet paper rolls
+
 ![PC Dash](thumbs/PcDash.jpg)
+
 [PC Dash](pcdash) - Controlling a 1991 Mazda MPV dashboard via USB
+
 ![Airlight](thumbs/Airlight.JPG)
+
 [Airlight](airlight) - Wireless traffic controller system
+
 ![Marty](thumbs/Marty.jpg)
+
 [Marty McFly](marty) - Back to the Future style countdown clock
+
 ![KRK RP10S](thumbs/rokit.jpg)
+
 [Rokit](rokit) - Partial notes while trying to fix my subwoofer
+
 ![Icegrid](thumbs/Icegrid.jpg)
+
 [Icegrid](icegrid) - Wireless LED weather forecast with an ice cube tray
+
 ![Audidash](thumbs/AudiDash.jpg)
+
 [Audidash](audidash) - Controlling a 1997 Audi A4 dashboard wirelessly
 
 ### Converging History

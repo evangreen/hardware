@@ -1,9 +1,10 @@
 # USB Relay
 
-![USB Relay](UsbRelay.JPG)
-![USB Relay Back](UsbRelayBack.JPG)
-
 This was a project I did in the fall of 2011 as a follow-on to the USB LED project from the summer. It utilized the same processor, communication interface, and ULN2803 as the USB LED, except instead of controlling LEDs it controlled triacs capable of switching 120VAC.
+
+![USB Relay](UsbRelay.JPG)
+
+![USB Relay Back](UsbRelayBack.JPG)
 
 # Design
 Heavier traces at the bottom of the board carried AC load separate from the low voltage logic. A common AC input was sent to 8 triacs in the first revision of the board, which was reduced to 5 in the second revision. Outputs from each of the triacs could then be connected to AC devices. The control pins of the triacs are connected to optoisolators, which then connect to the ATTiny2313 microcontroller. The optoisolators help keep the high voltage away from the low voltage. Surface mount LEDs of different colors for each triac indicate whether the triac is conducting or not.

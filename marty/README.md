@@ -1,8 +1,8 @@
 # Marty McFly
 
-![Outatime](McFly.JPG)
-
 The Marty McFly was a set of boards I created in late 2015 for my girlfriend as a gift. It's an LED countdown clock, in the style of the console from "Back to the Future". The three displays track the programmable "destination time" on the top row, the current time on the bottom row, and the "estimated time to arrival" in the middle row. The destination time and current time can be programmed using the keypad. The ETA counts up if the current time is after the destination time.
+
+![Outatime](McFly.JPG)
 
 ### Motivation
 Because it's fun. I was hoping to give this to my girlfriend in time for the Back to the Future anniversary, but failed to complete it in time. She still appreciated the gift, and she ended up making the cool backing and framing for it.

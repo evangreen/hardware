@@ -3,7 +3,9 @@
 Airlight was a set of two hardware boards I started in 2013 in order to control the traffic lights I've collected in my house. It was also my first foray into the world of Wireless with the RFM22B boards.
 
 ![Master Controller](MasterController.JPG)
+
 ![Relay Board](RelayBoard.JPG)
+
 ![Relay Board back](RelayBoardBack.JPG)
 
 ### Design
@@ -24,5 +26,8 @@ One aspect that I'm less than pleased about is the sharing of the SPI bus betwee
 
 ### Pictures
 Some photos of the lights in my apartment
+
 ![Traffic Lights](Lights1.JPG)
+
 ![More Traffic Lights](Lights2.JPG)
+

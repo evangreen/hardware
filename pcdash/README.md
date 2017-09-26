@@ -1,9 +1,10 @@
 # PC Instrument Cluster
 
-![PC Dashboard](PcDash.JPG)
-![PC Dashboard](PcDash2.JPG)
-
 This project from early 2013 connects the gauges and indicators of a 1991 Mazda MPV instrument cluster to a PC. An app on the PC can be used to control the indicators and gauges via a USB serial connection to the device. I currently have it measuring stats about the PC and my interaction with it. For example, the RPM gauge correlates to my words per minute typing. The temperature gauge corresponds to the current CPU usage. The fuel gauge starts out full and becomes empty as I use the machine for 2 hours without taking a break (indicator lights also start coming on to tell me to take a break). The left and right turn signals blink whenever I use the left and right shift keys. Various indicators correspond to miscellaneous stats, like increased network usage or using the backspace key.
+
+![PC Dashboard](PcDash.JPG)
+
+![PC Dashboard](PcDash2.JPG)
 
 ### Design
 The control board itself is a simple protoboard with an ATMega32U4 breakout board from SparkFun. A USB cable powers the logic of the board and provides the communication interface to the PC. A molex connector provides a 12V supply, which is needed to light up the indicators and gauges.

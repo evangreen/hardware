@@ -1,8 +1,8 @@
 # Binyclock
 
-![BinyClock](BinyClock1.JPG)
-
 Binyclock, short for tiny binary clock, was a miniature board I made in early 2011. It uses a 5x7 green dot matrix display and at ATMega8 microcontroller to display a binary clock. It also scrolls text occasionally and when the button is pressed indicating the full time and date. I made about ten of these, and gave them out as gifts to friends and family. I also programmed their names and birthdays into each, so it would wish them a happy birthday each year.
+
+![BinyClock](BinyClock1.JPG)
 
 ### Usage
 The device contains a USB mini connector, so any USB mini cable can power it. The clock pretty much runs itself, and only has one button to keep size and cost down. Pressing the button momentarily scrolls the full date and time, which also happens on its own periodically. Holding down the button takes the user through a wizard-style interface, where the user is prompted with scrolling text to set the Year, Month, Day, Hour, and Minute. Short presses advance the value, and long presses move on to the next field, eventually completing the wizard.
@@ -16,6 +16,11 @@ Still, it was a fun project, it basically worked in the end, and I think people 
 
 ### Photos
 ![BinyClock](BinyClock2.JPG)
+
+Another shot of the front of the Binyclock
+
 ![BinyClock Back](BinyClockBack.JPG)
-My remaining stash of BinyClocks
+
 ![BinyClock Stash](BinyClockStash.JPG)
+
+My remaining stash of BinyClocks

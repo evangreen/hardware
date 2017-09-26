@@ -1,8 +1,8 @@
 # Icegrid
 
-![IceGrid](IcegridFinal.JPG)
-
 The icegrid is a 5x3 wireless RGB LED indicator panel made from silicone ice cube trays, strips of WS2812 RGB LEDs, and an ESP8266 wifi board. I built two of these in 2016, and am currently using one to display a five-day weather forecast for three different cities.
+
+![IceGrid](IcegridFinal.JPG)
 
 # Design
 I found some cheap silicone ice cube trays on Amazon, and combined them with cut up strips of WS2812 LEDs. I managed to find a combination of LED strip and ice cube tray that would result in one RGB LED landing in each ice cube slot. I cut the strips into groups of five LEDs, one strip per row. After cutting a slit in the bottom of the separators between columns, I was able to feed the strips through along the bottom inside of the tray, and solder wires to connect the three rows together into a backwards "S" pattern.
@@ -37,8 +37,13 @@ I really enjoy this device, and it's quite useful to me as I can quickly glance 
 
 ### Photos
 ![Icegrid innards](IcegridInsides.JPG)
+
 The insides of the IceGrid
+
 ![Icegrid Legend](IcegridLegend.JPG)
+
 Legend for the forecast colors. High temperatures round to nearest 10 degrees (eg. 70 ~ 65-74).
+
 ![Prototype Legend](IcegridPrototypeLegend.JPG)
+
 Prototype legend before printing the transparency

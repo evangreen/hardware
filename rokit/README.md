@@ -18,6 +18,9 @@ I don't own an oscilloscope, so debugging sound quality issues is a little above
 
 ### Photos
 ![Explosion](KRK_Catastrophe.JPG)
+
 The yellow stringy area is the completely exploded electrolytic capacitor. It got all over large parts of the board. I'd never seen that before.
+
 ![Disassembly](KRK_Disassembly.JPG)
+
 A photo of me pulling the back panel out of the woofer cabinet.

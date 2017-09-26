@@ -1,9 +1,10 @@
 # Matrix
 
-![Matrix front](MatrixFront.JPG)
-![Matrix back](MatrixBack.JPG)
-
 Matrix was an RGB LED matrix art project I started in 2010. It was my first hardware project outside of college. The idea was to hang it on a wall, and have it be an interactive display that people could play with. I envisioned it having simulations like Boids and Conway's Game of Life, as well as games like Tetris and Sokoban. For kicks it also contained a blood alcohol sensor that could allow participants to test their level of inebriation, and a microphone to use as an interactive source of randomness. The primary interface was two blackberry trackballs and several buttons. Overall most of it worked, but it contained a few fatal design and implementation flaws, and ultimately I ended up abandoning it before completing the project.
+
+![Matrix front](MatrixFront.JPG)
+
+![Matrix back](MatrixBack.JPG)
 
 ### Design
 The hardware design consisted of two boards: a single mainboard and several slave boards. The mainboard contained a 16x2 character LCD display, the BAC sensor, a microphone, two buttons, two trackballs, an RS-232 connector, and a barrel connector for power supply input. It also had the ATMega328, which was the brains of the whole device, and a set of SPI pins that plugged into the slave boards. The slave boards were connected to each of 9 8x8 RGB LED matrices. The slave boards acted as a "backpack" for each RGB matrix. The same set of SPI pins were piped out on all four edges of the board, meaning you could plug them in to form an arbitrary sized display. Each slave board had an ATMega on it that was responsible for multiplexing out the current state for its 8x8 RGB matrix. Colors were achieved by lighting LEDs for only some time slots, and leaving it off for others.
